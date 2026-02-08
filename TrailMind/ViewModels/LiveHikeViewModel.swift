@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
+import UIKit
 
 @MainActor
 final class LiveHikeViewModel: ObservableObject {
@@ -37,6 +38,12 @@ final class LiveHikeViewModel: ObservableObject {
     private var lastPoint: LocationPoint?
     private var clockTicker: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
+    private var lastAIRequestAt: Date?
+
+    private let maxInMemoryRoutePoints = 4000
+    private let maxInMemorySegments = 6000
+    private let memoryWarningRoutePoints = 1500
+    private let memoryWarningSegments = 2200
 
     init(
         sessionStore: HikeSessionStore,
@@ -96,6 +103,13 @@ final class LiveHikeViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] tier in
                 self?.premiumTier = tier
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleMemoryPressure()
             }
             .store(in: &cancellables)
     }
@@ -187,6 +201,9 @@ final class LiveHikeViewModel: ObservableObject {
         guard isTracking else { return }
 
         route.append(point)
+        if route.count > maxInMemoryRoutePoints {
+            route = MemorySafeCollections.downsampleRoute(route, to: maxInMemoryRoutePoints)
+        }
 
         guard let previous = lastPoint else {
             lastPoint = point
@@ -230,6 +247,9 @@ final class LiveHikeViewModel: ObservableObject {
                 terrain: terrainInsight.terrain
             )
         )
+        if segments.count > maxInMemorySegments {
+            segments = MemorySafeCollections.mergeSegments(segments, to: maxInMemorySegments)
+        }
 
         refreshFatigue()
         refreshSafety()
@@ -267,6 +287,10 @@ final class LiveHikeViewModel: ObservableObject {
         }
 
         guard segments.count % 3 == 0 else { return }
+        if let lastAIRequestAt, Date().timeIntervalSince(lastAIRequestAt) < 20 {
+            return
+        }
+        lastAIRequestAt = Date()
 
         let snapshot = LiveMetricsSnapshot(
             elapsed: elapsed,
@@ -284,5 +308,15 @@ final class LiveHikeViewModel: ObservableObject {
                 self.aiInsight = text
             }
         }
+    }
+
+    private func handleMemoryPressure() {
+        if route.count > memoryWarningRoutePoints {
+            route = MemorySafeCollections.downsampleRoute(route, to: memoryWarningRoutePoints)
+        }
+        if segments.count > memoryWarningSegments {
+            segments = MemorySafeCollections.mergeSegments(segments, to: memoryWarningSegments)
+        }
+        aiInsight = "Memory optimized during long recording to keep tracking stable."
     }
 }
