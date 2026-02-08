@@ -28,6 +28,8 @@
 	<string>TrailMind connects to BLE heart-rate sensors for live heart rate while hiking.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>TrailMind reads heart rate to estimate fatigue and effort.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>TrailMind may write workout and hiking session summaries to Health so your activity data stays consistent across devices.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>TrailMind uses your location in the background to keep drawing your hike track.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
