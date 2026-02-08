@@ -12,10 +12,11 @@ struct DefaultPostHikeAnalysisService: PostHikeAnalysisService {
         var insights = [PerformanceInsight]()
 
         if let mostIntense = session.segments.max(by: { $0.effortIndex < $1.effortIndex }) {
+            let offsetMinutes = max(0, mostIntense.startedAt.timeIntervalSince(session.startedAt) / 60)
             insights.append(
                 PerformanceInsight(
                     title: "Peak Load Segment",
-                    detail: "Highest effort was around \(format(minutes: mostIntense.duration / 60)). Consider a short pause before similar climbs."
+                    detail: "Highest effort was around \(format(minutes: offsetMinutes)). Consider a short pause before similar climbs."
                 )
             )
         }

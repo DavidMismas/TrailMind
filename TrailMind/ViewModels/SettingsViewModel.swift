@@ -10,15 +10,23 @@ final class SettingsViewModel: ObservableObject {
     @Published var locationEnabled = false
     @Published var backgroundLocationEnabled = false
     @Published var fitnessEnabled = false
+    @Published var preferDirectBLE = false
+    @Published private(set) var bleState: BluetoothHeartRateConnectionState = .idle
 
     private let premiumService: PremiumPurchaseService
     private let permissionService: PermissionService
+    private let bluetoothHeartRateService: BluetoothHeartRateControlService
     private var cancellables = Set<AnyCancellable>()
     private var isSystemSyncing = false
 
-    init(premiumService: PremiumPurchaseService, permissionService: PermissionService) {
+    init(
+        premiumService: PremiumPurchaseService,
+        permissionService: PermissionService,
+        bluetoothHeartRateService: BluetoothHeartRateControlService
+    ) {
         self.premiumService = premiumService
         self.permissionService = permissionService
+        self.bluetoothHeartRateService = bluetoothHeartRateService
 
         premiumService.tierPublisher
             .receive(on: DispatchQueue.main)
@@ -36,6 +44,23 @@ final class SettingsViewModel: ObservableObject {
                 backgroundLocationEnabled = snapshot.locationAlways
                 fitnessEnabled = snapshot.health || snapshot.motion
                 isSystemSyncing = false
+            }
+            .store(in: &cancellables)
+
+        bluetoothHeartRateService.preferredBLEPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] preferred in
+                guard let self else { return }
+                isSystemSyncing = true
+                preferDirectBLE = preferred
+                isSystemSyncing = false
+            }
+            .store(in: &cancellables)
+
+        bluetoothHeartRateService.bleStatePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.bleState = state
             }
             .store(in: &cancellables)
 
@@ -97,5 +122,42 @@ final class SettingsViewModel: ObservableObject {
 
     func openSystemSettings() {
         permissionService.openSystemSettings()
+    }
+
+    func preferDirectBLEChanged(_ enabled: Bool) {
+        guard !isSystemSyncing else { return }
+        bluetoothHeartRateService.setBLEPreferred(enabled)
+    }
+
+    func connectBLE() {
+        bluetoothHeartRateService.connectBLE()
+    }
+
+    func disconnectBLE() {
+        bluetoothHeartRateService.disconnectBLE()
+    }
+
+    var blePrimaryButtonTitle: String {
+        switch bleState {
+        case .scanning:
+            return "Scanning..."
+        case .connecting(_):
+            return "Connecting..."
+        case .connected(_):
+            return "Reconnect"
+        default:
+            return "Connect Sensor"
+        }
+    }
+
+    var canTapConnectBLE: Bool {
+        switch bleState {
+        case .scanning, .connecting(_):
+            return false
+        case .poweredOff, .unauthorized, .unsupported:
+            return false
+        default:
+            return true
+        }
     }
 }

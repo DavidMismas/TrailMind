@@ -14,10 +14,16 @@ struct CheckInCardView: View {
                 .font(.subheadline)
                 .foregroundStyle(isDue ? .orange : Color.white.opacity(0.72))
 
-            Button("Send Check-in", action: action)
-                .buttonStyle(.borderedProminent)
-                .tint(TrailTheme.accent)
+            Button(action: action) {
+                Text("Send Check-in")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(TrailTheme.accent)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .trailCard()
     }
 }

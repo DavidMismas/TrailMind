@@ -12,6 +12,7 @@ struct SettingsScreen: View {
                 ScrollView {
                     VStack(spacing: 14) {
                         permissionsCard
+                        heartRateCard
                         planCard
 
                         PremiumFeatureCardView(
@@ -78,6 +79,10 @@ struct SettingsScreen: View {
             ))
             .tint(TrailTheme.accent)
 
+            Text("Apple Watch heart rate sync uses HealthKit.")
+                .font(.caption)
+                .foregroundStyle(Color.white.opacity(0.68))
+
             Text("Turning a toggle OFF opens iOS Settings because permissions are managed by the system.")
                 .font(.caption)
                 .foregroundStyle(Color.white.opacity(0.68))
@@ -105,6 +110,46 @@ struct SettingsScreen: View {
                 .foregroundStyle(Color.white.opacity(0.72))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .trailCard()
+    }
+
+    private var heartRateCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Heart Rate")
+                .font(.headline)
+                .foregroundStyle(.white)
+
+            Toggle("Prefer Direct BLE Sensor", isOn: Binding(
+                get: { viewModel.preferDirectBLE },
+                set: { viewModel.preferDirectBLEChanged($0) }
+            ))
+            .tint(TrailTheme.accent)
+
+            Text(viewModel.bleState.title)
+                .font(.subheadline)
+                .foregroundStyle(Color.white.opacity(0.78))
+
+            HStack(spacing: 10) {
+                Button(viewModel.blePrimaryButtonTitle) {
+                    viewModel.connectBLE()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TrailTheme.accent)
+                .disabled(!viewModel.canTapConnectBLE)
+
+                Button("Disconnect") {
+                    viewModel.disconnectBLE()
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
+                .disabled(!viewModel.bleState.isConnected)
+            }
+
+            Text("Direct BLE is for HR sensors that broadcast Heart Rate Service (0x180D). Apple Watch uses HealthKit.")
+                .font(.caption)
+                .foregroundStyle(Color.white.opacity(0.68))
+        }
+        .foregroundStyle(.white)
         .trailCard()
     }
 }

@@ -15,7 +15,7 @@ struct LiveHikeScreen: View {
                         RouteMapView(
                             route: viewModel.route,
                             isTracking: viewModel.isTracking,
-                            onTap: { isShowingFullMap = true }
+                            onExpand: { isShowingFullMap = true }
                         )
 
                         Button {
@@ -47,7 +47,7 @@ struct LiveHikeScreen: View {
                                 title: "Trail Difficulty",
                                 value: "\(Int(viewModel.trailDifficultyScore))",
                                 footnote: "terrain + effort",
-                                tint: .purple
+                                tint: TrailTheme.warning
                             )
                         }
 
@@ -58,22 +58,24 @@ struct LiveHikeScreen: View {
                                 footnote: "current"
                             )
                             MetricTileView(
-                                title: "Slope",
-                                value: Formatting.percent(viewModel.slopePercent),
-                                footnote: "grade"
+                                title: "Heart Rate",
+                                value: viewModel.heartRateDisplayValue,
+                                footnote: viewModel.heartRateFootnote
                             )
                         }
 
+                        AltitudeProfileView(route: viewModel.route)
+
                         HStack {
                             MetricTileView(
-                                title: "Heart Rate",
-                                value: "\(Int(viewModel.heartRate)) bpm",
-                                footnote: "HealthKit"
+                                title: "Elevation Gain",
+                                value: Formatting.meters(viewModel.totalElevationGain),
+                                footnote: "total"
                             )
                             MetricTileView(
-                                title: "Elevation",
-                                value: Formatting.meters(viewModel.totalElevationGain),
-                                footnote: "gain"
+                                title: "Live Altitude",
+                                value: Formatting.meters(viewModel.currentAltitude),
+                                footnote: "current"
                             )
                         }
 

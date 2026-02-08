@@ -54,6 +54,26 @@ struct HikeDetailScreen: View {
                             )
                         }
 
+                        if viewModel.isGeneratingAIInsights(for: hikeID) {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                    .tint(.white)
+                                Text("Generating AI insights from your hike data...")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.white.opacity(0.8))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .trailCard()
+                        }
+
+                        if viewModel.isAIUnavailable(for: hikeID) {
+                            Text("Apple Intelligence is unavailable, so this report uses rule-based insights.")
+                                .font(.footnote)
+                                .foregroundStyle(Color.white.opacity(0.76))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .trailCard()
+                        }
+
                         InsightsListView(insights: report.insights)
 
                         if viewModel.premiumTier.hasRecoveryModel {
@@ -127,6 +147,9 @@ struct HikeDetailScreen: View {
                     Button("Save") {
                         viewModel.renameHike(hikeID: hikeID, newName: renameDraft)
                     }
+                }
+                .task(id: hikeID) {
+                    viewModel.requestAIInsights(for: hikeID)
                 }
             } else {
                 ContentUnavailableView("Hike Missing", systemImage: "exclamationmark.triangle")

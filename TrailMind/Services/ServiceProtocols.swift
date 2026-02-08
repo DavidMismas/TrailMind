@@ -9,8 +9,57 @@ protocol LocationTrackingService: AnyObject {
 
 protocol HeartRateService: AnyObject {
     var heartRatePublisher: AnyPublisher<Double, Never> { get }
+    var sourceLabelPublisher: AnyPublisher<String, Never> { get }
     func start()
     func stop()
+}
+
+enum BluetoothHeartRateConnectionState: Equatable {
+    case unsupported
+    case unauthorized
+    case poweredOff
+    case idle
+    case scanning
+    case connecting(name: String)
+    case connected(name: String)
+    case failed(reason: String)
+
+    var title: String {
+        switch self {
+        case .unsupported:
+            return "Bluetooth LE unavailable on this device."
+        case .unauthorized:
+            return "Bluetooth permission is not granted."
+        case .poweredOff:
+            return "Bluetooth is powered off."
+        case .idle:
+            return "No BLE heart-rate device connected."
+        case .scanning:
+            return "Scanning for BLE heart-rate devices..."
+        case .connecting(let name):
+            return "Connecting to \(name)..."
+        case .connected(let name):
+            return "Connected to \(name)."
+        case .failed(let reason):
+            return reason
+        }
+    }
+
+    var isConnected: Bool {
+        if case .connected = self {
+            return true
+        }
+        return false
+    }
+}
+
+protocol BluetoothHeartRateControlService: AnyObject {
+    var preferredBLEPublisher: AnyPublisher<Bool, Never> { get }
+    var bleStatePublisher: AnyPublisher<BluetoothHeartRateConnectionState, Never> { get }
+    var isBLEPreferred: Bool { get }
+    func setBLEPreferred(_ enabled: Bool)
+    func connectBLE()
+    func disconnectBLE()
 }
 
 protocol CadenceService: AnyObject {
@@ -56,7 +105,12 @@ protocol SafetyEvaluationService {
 }
 
 protocol AppleIntelligenceService {
-    func liveInsight(from snapshot: LiveMetricsSnapshot) async -> String
+    func liveInsight(from snapshot: LiveMetricsSnapshot, profile: UserProfile?) async -> String
+    func postHikeInsights(
+        for session: HikeSession,
+        historicalSessions: [HikeSession],
+        profile: UserProfile?
+    ) async -> [PerformanceInsight]?
 }
 
 protocol PostHikeAnalysisService {
@@ -66,6 +120,12 @@ protocol PostHikeAnalysisService {
 protocol OfflineTrailCacheService {
     func cache(route: [LocationPoint], sessionID: UUID)
     func load(sessionID: UUID) -> [LocationPoint]
+}
+
+protocol ActiveHikeStatePersistenceService {
+    func save(_ checkpoint: ActiveHikeCheckpoint)
+    func load() -> ActiveHikeCheckpoint?
+    func clear()
 }
 
 protocol PremiumPurchaseService: AnyObject {
