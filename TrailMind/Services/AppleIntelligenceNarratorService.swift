@@ -64,8 +64,14 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
                     to: postHikePrompt(session: session, historical: historicalSessions, profile: profile),
                     options: GenerationOptions(temperature: 0.25, maximumResponseTokens: 260)
                 )
-                let parsed = parseInsights(from: response.content)
-                return parsed.isEmpty ? nil : parsed
+                let rawOutput = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                let parsed = parseInsights(from: rawOutput)
+                if !parsed.isEmpty {
+                    return parsed
+                }
+
+                let fallback = fallbackInsights(from: rawOutput)
+                return fallback.isEmpty ? nil : fallback
             } catch {
                 return nil
             }
@@ -206,34 +212,106 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
             .filter { !$0.isEmpty }
 
         for line in lines {
-            let cleaned = line
-                .replacingOccurrences(of: "•", with: "")
-                .replacingOccurrences(of: "-", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-            let pipeParts = cleaned.split(separator: "|", maxSplits: 1).map {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if pipeParts.count == 2 {
-                insights.append(PerformanceInsight(
-                    title: String(pipeParts[0].prefix(40)),
-                    detail: String(pipeParts[1].prefix(140))
-                ))
-                continue
-            }
-
-            let colonParts = cleaned.split(separator: ":", maxSplits: 1).map {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if colonParts.count == 2 {
-                insights.append(PerformanceInsight(
-                    title: String(colonParts[0].prefix(40)),
-                    detail: String(colonParts[1].prefix(140))
-                ))
+            let cleaned = stripListPrefix(from: line)
+            guard !cleaned.isEmpty else { continue }
+            if let parsed = parseInsightLine(cleaned) {
+                insights.append(parsed)
             }
         }
 
         return Array(insights.prefix(3))
+    }
+
+    private func parseInsightLine(_ line: String) -> PerformanceInsight? {
+        if let insight = insight(line, separatedBy: "|") {
+            return insight
+        }
+
+        if let insight = insight(line, separatedBy: ":") {
+            return insight
+        }
+
+        if let insight = insight(line, separatedBy: " - ") {
+            return insight
+        }
+
+        return nil
+    }
+
+    private func insight(_ line: String, separatedBy separator: String) -> PerformanceInsight? {
+        guard let range = line.range(of: separator) else { return nil }
+
+        let title = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard isValidInsightTitle(title), detail.count > 10 else { return nil }
+
+        return PerformanceInsight(
+            title: String(title.prefix(40)),
+            detail: String(detail.prefix(140))
+        )
+    }
+
+    private func fallbackInsights(from text: String) -> [PerformanceInsight] {
+        let collapsed = text.replacingOccurrences(of: "\n", with: " ")
+        let sentences = collapsed
+            .split(whereSeparator: isSentenceSeparator)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count > 20 }
+
+        guard !sentences.isEmpty else { return [] }
+
+        return Array(sentences.prefix(3).enumerated().map { index, sentence in
+            PerformanceInsight(
+                title: fallbackTitle(for: sentence, index: index),
+                detail: String(sentence.prefix(140))
+            )
+        })
+    }
+
+    private func fallbackTitle(for sentence: String, index: Int) -> String {
+        let lower = sentence.lowercased()
+        if lower.contains("recover") || lower.contains("rest") || lower.contains("readiness") {
+            return "Recovery"
+        }
+        if lower.contains("terrain") || lower.contains("climb") || lower.contains("downhill") {
+            return "Terrain"
+        }
+        if lower.contains("pace") || lower.contains("fatigue") || lower.contains("effort") {
+            return "Pacing"
+        }
+
+        let defaults = ["Pacing", "Terrain", "Recovery"]
+        return defaults[min(index, defaults.count - 1)]
+    }
+
+    private func stripListPrefix(from line: String) -> String {
+        var cleaned = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        while let first = cleaned.first, first == "•" || first == "-" || first == "*" {
+            cleaned.removeFirst()
+            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let firstSpace = cleaned.firstIndex(of: " ") {
+            let token = cleaned[..<firstSpace]
+            let isNumberedToken = token.contains(where: \.isNumber) && token.allSatisfy { character in
+                character.isNumber || character == "." || character == ")" || character == "("
+            }
+            if isNumberedToken {
+                cleaned = String(cleaned[cleaned.index(after: firstSpace)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return cleaned
+    }
+
+    private func isValidInsightTitle(_ title: String) -> Bool {
+        !title.isEmpty && title.count <= 40
+    }
+
+    private func isSentenceSeparator(_ character: Character) -> Bool {
+        character == "." || character == "!" || character == "?"
     }
 
     private func formattedPace(from speed: Double) -> String {

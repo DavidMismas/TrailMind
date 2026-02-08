@@ -33,6 +33,7 @@ final class LiveHikeViewModel: ObservableObject {
     private let terrainService: TerrainInsightService
     private let safetyService: SafetyEvaluationService
     private let aiService: AppleIntelligenceService
+    private let liveActivityService: LiveActivityService
     private let cacheService: OfflineTrailCacheService
     private let activeHikeStore: ActiveHikeStatePersistenceService
     private let profileStore: UserProfileStore
@@ -52,6 +53,12 @@ final class LiveHikeViewModel: ObservableObject {
     private let memoryWarningSegments = 2200
     private let heartRateStaleAfter: TimeInterval = 25
     private let checkpointSaveInterval: TimeInterval = 4
+    private let liveActivityUpdateInterval: TimeInterval = 8
+    private let liveActivityDistanceDelta: Double = 8
+    private let maxWidgetAltitudeSamples = 90
+
+    private var lastLiveActivityUpdateAt: Date?
+    private var lastLiveActivityDistanceMeters: Double = 0
 
     init(
         sessionStore: HikeSessionStore,
@@ -63,6 +70,7 @@ final class LiveHikeViewModel: ObservableObject {
         terrainService: TerrainInsightService,
         safetyService: SafetyEvaluationService,
         aiService: AppleIntelligenceService,
+        liveActivityService: LiveActivityService,
         cacheService: OfflineTrailCacheService,
         activeHikeStore: ActiveHikeStatePersistenceService,
         premiumService: PremiumPurchaseService,
@@ -77,6 +85,7 @@ final class LiveHikeViewModel: ObservableObject {
         self.terrainService = terrainService
         self.safetyService = safetyService
         self.aiService = aiService
+        self.liveActivityService = liveActivityService
         self.cacheService = cacheService
         self.activeHikeStore = activeHikeStore
         self.profileStore = profileStore
@@ -209,8 +218,20 @@ final class LiveHikeViewModel: ObservableObject {
         heartRateSourceLabel = "Waiting for heart-rate source"
         lastHeartRateSampleAt = nil
         lastCheckpointSavedAt = nil
+        lastLiveActivityUpdateAt = nil
+        lastLiveActivityDistanceMeters = 0
         currentAltitude = 0
 
+        if let startDate {
+            liveActivityService.start(
+                startedAt: startDate,
+                elapsed: elapsed,
+                distanceMeters: totalDistance,
+                currentAltitudeMeters: currentAltitude,
+                elevationGainMeters: totalElevationGain,
+                altitudeSamples: buildLiveAltitudeSamples()
+            )
+        }
         startLiveServices()
         persistCheckpoint(force: true)
     }
@@ -220,10 +241,22 @@ final class LiveHikeViewModel: ObservableObject {
 
         isTracking = false
         stopLiveServices()
+        let finalElapsed = Date().timeIntervalSince(startDate)
+        let finalDistance = totalDistance
+        liveActivityService.stop(
+            startedAt: startDate,
+            elapsed: finalElapsed,
+            distanceMeters: finalDistance,
+            currentAltitudeMeters: currentAltitude,
+            elevationGainMeters: totalElevationGain,
+            altitudeSamples: buildLiveAltitudeSamples()
+        )
         heartRate = nil
         heartRateSourceLabel = "No heart-rate source"
         lastHeartRateSampleAt = nil
         lastCheckpointSavedAt = nil
+        lastLiveActivityUpdateAt = nil
+        lastLiveActivityDistanceMeters = 0
 
         let session = HikeSession(
             startedAt: startDate,
@@ -304,6 +337,7 @@ final class LiveHikeViewModel: ObservableObject {
         refreshFatigue()
         refreshSafety()
         refreshAIIfNeeded()
+        updateLiveActivityIfNeeded(force: false)
         persistCheckpoint(force: false)
 
         lastPoint = point
@@ -417,6 +451,7 @@ final class LiveHikeViewModel: ObservableObject {
                 elapsed = Date().timeIntervalSince(startDate)
                 refreshHeartRateAvailability()
                 refreshSafety()
+                updateLiveActivityIfNeeded(force: false)
                 persistCheckpoint(force: false)
             }
     }
@@ -477,8 +512,108 @@ final class LiveHikeViewModel: ObservableObject {
         heartRateSourceLabel = "Reconnecting heart-rate source"
         lastHeartRateSampleAt = nil
         lastCheckpointSavedAt = nil
+        lastLiveActivityUpdateAt = nil
+        lastLiveActivityDistanceMeters = totalDistance
 
+        liveActivityService.start(
+            startedAt: checkpoint.startedAt,
+            elapsed: elapsed,
+            distanceMeters: totalDistance,
+            currentAltitudeMeters: currentAltitude,
+            elevationGainMeters: totalElevationGain,
+            altitudeSamples: buildLiveAltitudeSamples()
+        )
         startLiveServices()
+        updateLiveActivityIfNeeded(force: true)
         persistCheckpoint(force: true)
+    }
+
+    private func updateLiveActivityIfNeeded(force: Bool) {
+        guard isTracking, let startDate else { return }
+
+        let now = Date()
+        let distance = totalDistance
+        if !force {
+            let recentlyUpdated = (lastLiveActivityUpdateAt.map { now.timeIntervalSince($0) < liveActivityUpdateInterval } ?? false)
+            let distanceDelta = abs(distance - lastLiveActivityDistanceMeters)
+            if recentlyUpdated && distanceDelta < liveActivityDistanceDelta {
+                return
+            }
+        }
+
+        let liveElapsed = now.timeIntervalSince(startDate)
+        liveActivityService.update(
+            startedAt: startDate,
+            elapsed: liveElapsed,
+            distanceMeters: distance,
+            currentAltitudeMeters: currentAltitude,
+            elevationGainMeters: totalElevationGain,
+            altitudeSamples: buildLiveAltitudeSamples()
+        )
+        lastLiveActivityUpdateAt = now
+        lastLiveActivityDistanceMeters = distance
+    }
+
+    private func buildLiveAltitudeSamples() -> [LiveAltitudeSample] {
+        guard !route.isEmpty else {
+            return [
+                LiveAltitudeSample(distanceMeters: 0, altitudeMeters: currentAltitude)
+            ]
+        }
+
+        var samples: [LiveAltitudeSample] = []
+        samples.reserveCapacity(route.count)
+
+        var cumulativeDistance: Double = 0
+        samples.append(
+            LiveAltitudeSample(
+                distanceMeters: cumulativeDistance,
+                altitudeMeters: route[0].altitude
+            )
+        )
+
+        if route.count > 1 {
+            for index in 1..<route.count {
+                let previous = route[index - 1]
+                let current = route[index]
+                let stepDistance = CLLocation(
+                    latitude: previous.coordinate.latitude,
+                    longitude: previous.coordinate.longitude
+                ).distance(
+                    from: CLLocation(
+                        latitude: current.coordinate.latitude,
+                        longitude: current.coordinate.longitude
+                    )
+                )
+                cumulativeDistance += max(0, stepDistance)
+                samples.append(
+                    LiveAltitudeSample(
+                        distanceMeters: cumulativeDistance,
+                        altitudeMeters: current.altitude
+                    )
+                )
+            }
+        }
+
+        return downsampleAltitudeSamples(samples, to: maxWidgetAltitudeSamples)
+    }
+
+    private func downsampleAltitudeSamples(
+        _ samples: [LiveAltitudeSample],
+        to maxCount: Int
+    ) -> [LiveAltitudeSample] {
+        guard maxCount > 1, samples.count > maxCount else { return samples }
+
+        let lastIndex = samples.count - 1
+        var result: [LiveAltitudeSample] = []
+        result.reserveCapacity(maxCount)
+
+        for index in 0..<maxCount {
+            let ratio = Double(index) / Double(maxCount - 1)
+            let sourceIndex = Int((Double(lastIndex) * ratio).rounded())
+            result.append(samples[min(lastIndex, sourceIndex)])
+        }
+
+        return result
     }
 }

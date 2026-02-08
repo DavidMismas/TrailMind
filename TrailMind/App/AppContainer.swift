@@ -13,6 +13,7 @@ final class AppContainer {
     private let terrainService = DefaultTerrainInsightService()
     private let safetyService = DefaultSafetyEvaluationService()
     private let aiService = AppleIntelligenceNarratorService()
+    private let liveActivityService = DefaultLiveActivityService()
     private let postHikeService = DefaultPostHikeAnalysisService()
     private let cacheService = FileTrailCacheService()
     private let activeHikeStore = ActiveHikeCheckpointStore()
@@ -35,6 +36,7 @@ final class AppContainer {
         terrainService: terrainService,
         safetyService: safetyService,
         aiService: aiService,
+        liveActivityService: liveActivityService,
         cacheService: cacheService,
         activeHikeStore: activeHikeStore,
         premiumService: premiumService,

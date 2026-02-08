@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 @MainActor
 final class PostHikeViewModel: ObservableObject {
@@ -8,6 +11,7 @@ final class PostHikeViewModel: ObservableObject {
     @Published private(set) var aiInsightsByHikeID: [UUID: [PerformanceInsight]] = [:]
     @Published private(set) var generatingAIInsightsFor: Set<UUID> = []
     @Published private(set) var aiInsightsUnavailableFor: Set<UUID> = []
+    @Published private(set) var aiUnavailableReasonByHikeID: [UUID: String] = [:]
 
     private let sessionStore: HikeSessionStore
     private let analysisService: PostHikeAnalysisService
@@ -40,6 +44,7 @@ final class PostHikeViewModel: ObservableObject {
                 aiInsightsByHikeID = aiInsightsByHikeID.filter { validIDs.contains($0.key) }
                 generatingAIInsightsFor = generatingAIInsightsFor.filter { validIDs.contains($0) }
                 aiInsightsUnavailableFor = aiInsightsUnavailableFor.filter { validIDs.contains($0) }
+                aiUnavailableReasonByHikeID = aiUnavailableReasonByHikeID.filter { validIDs.contains($0.key) }
             }
             .store(in: &cancellables)
 
@@ -86,10 +91,11 @@ final class PostHikeViewModel: ObservableObject {
 
     func requestAIInsights(for hikeID: UUID) {
         guard aiInsightsByHikeID[hikeID] == nil else { return }
-        guard !aiInsightsUnavailableFor.contains(hikeID) else { return }
         guard !generatingAIInsightsFor.contains(hikeID) else { return }
         guard let session = hike(for: hikeID) else { return }
 
+        aiInsightsUnavailableFor.remove(hikeID)
+        aiUnavailableReasonByHikeID.removeValue(forKey: hikeID)
         generatingAIInsightsFor.insert(hikeID)
         let historical = hikes.filter { $0.id != hikeID }
         let profile = profileStore.profile
@@ -104,8 +110,10 @@ final class PostHikeViewModel: ObservableObject {
                 if let generated, !generated.isEmpty {
                     aiInsightsByHikeID[hikeID] = generated
                     aiInsightsUnavailableFor.remove(hikeID)
+                    aiUnavailableReasonByHikeID.removeValue(forKey: hikeID)
                 } else {
                     aiInsightsUnavailableFor.insert(hikeID)
+                    aiUnavailableReasonByHikeID[hikeID] = currentAIUnavailableReason()
                 }
                 generatingAIInsightsFor.remove(hikeID)
             }
@@ -118,5 +126,38 @@ final class PostHikeViewModel: ObservableObject {
 
     func isAIUnavailable(for hikeID: UUID) -> Bool {
         aiInsightsUnavailableFor.contains(hikeID)
+    }
+
+    func aiUnavailableReason(for hikeID: UUID) -> String? {
+        aiUnavailableReasonByHikeID[hikeID]
+    }
+
+    private func currentAIUnavailableReason() -> String {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            let model = SystemLanguageModel.default
+
+            if !model.supportsLocale() {
+                return "Current system language is not supported by Apple Intelligence on this device."
+            }
+
+            switch model.availability {
+            case .available:
+                return "Apple Intelligence responded with no usable output. Try again."
+            case .unavailable(let reason):
+                switch reason {
+                case .deviceNotEligible:
+                    return "This iPhone is not eligible for on-device Apple Intelligence."
+                case .appleIntelligenceNotEnabled:
+                    return "Apple Intelligence is disabled in Settings."
+                case .modelNotReady:
+                    return "Apple Intelligence model is still downloading or preparing."
+                @unknown default:
+                    return "Apple Intelligence is currently unavailable for an unknown system reason."
+                }
+            }
+        }
+#endif
+        return "Apple Intelligence runtime is unavailable on this build."
     }
 }

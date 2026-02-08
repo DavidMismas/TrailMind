@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
@@ -20,10 +20,12 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.healthcare-fitness</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>TrailMind connects to BLE heart-rate sensors for live heart rate while hiking.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>TrailMind reads heart rate to estimate fatigue and effort.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -32,16 +34,16 @@
 	<string>TrailMind uses your location in the background to keep drawing your hike track.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TrailMind tracks GPS and elevation during your hike.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>TrailMind connects to BLE heart-rate sensors for live heart rate while hiking.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>TrailMind reads cadence to estimate pace and terrain stress.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 	</array>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

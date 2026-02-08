@@ -67,11 +67,25 @@ struct HikeDetailScreen: View {
                         }
 
                         if viewModel.isAIUnavailable(for: hikeID) {
-                            Text("Apple Intelligence is unavailable, so this report uses rule-based insights.")
-                                .font(.footnote)
-                                .foregroundStyle(Color.white.opacity(0.76))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .trailCard()
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Apple Intelligence is unavailable, so this report uses rule-based insights.")
+                                    .font(.footnote)
+                                    .foregroundStyle(Color.white.opacity(0.76))
+
+                                if let reason = viewModel.aiUnavailableReason(for: hikeID), !reason.isEmpty {
+                                    Text(reason)
+                                        .font(.footnote)
+                                        .foregroundStyle(Color.orange.opacity(0.9))
+                                }
+
+                                Button("Retry AI Insights") {
+                                    viewModel.requestAIInsights(for: hikeID)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(TrailTheme.accent)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .trailCard()
                         }
 
                         InsightsListView(insights: report.insights)

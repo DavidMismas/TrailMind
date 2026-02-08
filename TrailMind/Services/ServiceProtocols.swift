@@ -113,6 +113,38 @@ protocol AppleIntelligenceService {
     ) async -> [PerformanceInsight]?
 }
 
+struct LiveAltitudeSample: Codable, Hashable {
+    let distanceMeters: Double
+    let altitudeMeters: Double
+}
+
+protocol LiveActivityService {
+    func start(
+        startedAt: Date,
+        elapsed: TimeInterval,
+        distanceMeters: Double,
+        currentAltitudeMeters: Double,
+        elevationGainMeters: Double,
+        altitudeSamples: [LiveAltitudeSample]
+    )
+    func update(
+        startedAt: Date,
+        elapsed: TimeInterval,
+        distanceMeters: Double,
+        currentAltitudeMeters: Double,
+        elevationGainMeters: Double,
+        altitudeSamples: [LiveAltitudeSample]
+    )
+    func stop(
+        startedAt: Date,
+        elapsed: TimeInterval,
+        distanceMeters: Double,
+        currentAltitudeMeters: Double,
+        elevationGainMeters: Double,
+        altitudeSamples: [LiveAltitudeSample]
+    )
+}
+
 protocol PostHikeAnalysisService {
     func buildReport(from session: HikeSession, historicalSessions: [HikeSession]) -> PostHikeReport
 }
