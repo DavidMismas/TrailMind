@@ -77,7 +77,16 @@ final class CLLocationTrackingService: NSObject, CLLocationManagerDelegate, Loca
                 let lon = baseLon + Double(simulatedStep % 4) * 0.00005
                 let altitude = 295 + sin(Double(simulatedStep) / 2) * 18
                 let speed = 1.1 + Double(simulatedStep % 3) * 0.24
-                let point = LocationPoint(timestamp: date, latitude: lat, longitude: lon, altitude: altitude, speed: speed)
+                // Simulate good vertical accuracy (approx 3-4 meters)
+                let vertAcc = 3.0 + Double(simulatedStep % 2)
+                let point = LocationPoint(
+                    timestamp: date,
+                    latitude: lat,
+                    longitude: lon,
+                    altitude: altitude,
+                    speed: speed,
+                    verticalAccuracy: vertAcc
+                )
                 subject.send(point)
             }
     }

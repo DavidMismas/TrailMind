@@ -81,7 +81,8 @@ protocol FatigueScoringService {
         speed: Double,
         slopePercent: Double,
         heartRate: Double,
-        cadence: Double
+        cadence: Double,
+        profile: UserProfile?
     ) -> FatigueState
 }
 

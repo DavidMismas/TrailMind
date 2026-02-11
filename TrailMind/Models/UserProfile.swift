@@ -21,6 +21,21 @@ struct UserProfile: Codable {
     var weightKg: Double
     var heightCm: Double
     var condition: FitnessCondition
+    var restingHeartRate: Int = 60
+    var maxHeartRate: Int? = nil
+
+    var effectiveMaxHeartRate: Int {
+        if let maxHeartRate { return maxHeartRate }
+        return 220 - age
+    }
+
+    var trimpCapacity: Double {
+        switch condition {
+        case .beginner: return 150
+        case .moderate: return 220
+        case .advanced: return 300
+        }
+    }
 
     var fatigueMultiplier: Double {
         var multiplier = condition.fatigueMultiplier

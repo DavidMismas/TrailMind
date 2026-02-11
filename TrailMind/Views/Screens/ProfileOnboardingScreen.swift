@@ -2,10 +2,13 @@ import SwiftUI
 
 struct ProfileOnboardingScreen: View {
     let onSave: (UserProfile) -> Void
+    @FocusState private var isInputFocused: Bool
 
     @State private var age = ""
     @State private var weight = ""
     @State private var height = ""
+    @State private var restingHeartRate = ""
+    @State private var maxHeartRate = ""
     @State private var condition: FitnessCondition = .moderate
 
     var body: some View {
@@ -45,6 +48,9 @@ struct ProfileOnboardingScreen: View {
                         }
                         .trailCard()
 
+                        inputField("Resting Heart Rate (bpm)", text: $restingHeartRate, keyboard: .numberPad)
+                        inputField("Max Heart Rate (optional)", text: $maxHeartRate, keyboard: .numberPad)
+
                         Button("Continue") {
                             guard let profile = builtProfile else { return }
                             onSave(profile)
@@ -59,10 +65,27 @@ struct ProfileOnboardingScreen: View {
                     }
                     .padding()
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture { isInputFocused = false }
             }
             .navigationTitle("Welcome")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if isInputFocused {
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -82,7 +105,9 @@ struct ProfileOnboardingScreen: View {
             age: ageValue,
             weightKg: weightValue,
             heightCm: heightValue,
-            condition: condition
+            condition: condition,
+            restingHeartRate: Int(restingHeartRate) ?? 60,
+            maxHeartRate: Int(maxHeartRate)
         )
     }
 
@@ -94,6 +119,7 @@ struct ProfileOnboardingScreen: View {
 
             TextField(title, text: text)
                 .keyboardType(keyboard)
+                .focused($isInputFocused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(12)

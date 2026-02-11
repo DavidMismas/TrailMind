@@ -2,10 +2,13 @@ import SwiftUI
 
 struct PersonalProfileScreen: View {
     @ObservedObject var profileStore: UserProfileStore
+    @FocusState private var isInputFocused: Bool
 
     @State private var age = ""
     @State private var weight = ""
     @State private var height = ""
+    @State private var restingHeartRate = ""
+    @State private var maxHeartRate = ""
     @State private var condition: FitnessCondition = .moderate
     @State private var saveStatus = ""
 
@@ -36,6 +39,9 @@ struct PersonalProfileScreen: View {
                         }
                         .trailCard()
 
+                        inputField("Resting Heart Rate (bpm)", text: $restingHeartRate, keyboard: .numberPad)
+                        inputField("Max Heart Rate (optional)", text: $maxHeartRate, keyboard: .numberPad)
+
                         Button("Save Profile") {
                             guard let profile = builtProfile else { return }
                             profileStore.save(profile)
@@ -58,10 +64,27 @@ struct PersonalProfileScreen: View {
                     }
                     .padding()
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture { isInputFocused = false }
             }
             .navigationTitle("Personal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if isInputFocused {
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                    }
+                }
+            }
             .onAppear(perform: loadFromStore)
         }
     }
@@ -96,7 +119,9 @@ struct PersonalProfileScreen: View {
             age: ageValue,
             weightKg: weightValue,
             heightCm: heightValue,
-            condition: condition
+            condition: condition,
+            restingHeartRate: Int(restingHeartRate) ?? 60,
+            maxHeartRate: Int(maxHeartRate)
         )
     }
 
@@ -109,6 +134,10 @@ struct PersonalProfileScreen: View {
         age = "\(profile.age)"
         weight = String(format: "%.1f", profile.weightKg)
         height = String(format: "%.1f", profile.heightCm)
+        restingHeartRate = "\(profile.restingHeartRate)"
+        if let max = profile.maxHeartRate {
+            maxHeartRate = "\(max)"
+        }
         condition = profile.condition
     }
 
@@ -120,6 +149,7 @@ struct PersonalProfileScreen: View {
 
             TextField(title, text: text)
                 .keyboardType(keyboard)
+                .focused($isInputFocused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(12)

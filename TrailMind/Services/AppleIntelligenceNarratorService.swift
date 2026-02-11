@@ -117,15 +117,24 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
 
     private func livePrompt(snapshot: LiveMetricsSnapshot, profile: UserProfile?) -> String {
         let profileText: String
+        let hrZoneText: String
+        
         if let profile {
-            profileText = "Profile: age \(profile.age), weight \(Int(profile.weightKg))kg, height \(Int(profile.heightCm))cm, condition \(profile.condition.rawValue)."
+            let maxHR = profile.effectiveMaxHeartRate
+            let restingHR = profile.restingHeartRate
+            let hrReserve = Double(maxHR - restingHR)
+            let currentZone = hrReserve > 0 ? (snapshot.heartRate - Double(restingHR)) / hrReserve : 0
+            
+            profileText = "Profile: Age \(profile.age), Condition \(profile.condition.rawValue), MaxHR \(maxHR), RestHR \(restingHR)."
+            hrZoneText = "Heart Rate Zone: \(Int(currentZone * 100))% of Reserve."
         } else {
-            profileText = "Profile: unavailable."
+            profileText = "Profile: Unavailable (assume average fitness)."
+            hrZoneText = ""
         }
 
         let paceText = formattedPace(from: snapshot.speed)
         let heartRateText = snapshot.heartRate > 0 ? "\(Int(snapshot.heartRate.rounded())) bpm" : "unavailable"
-
+        
         return """
         \(profileText)
         Live metrics:
@@ -134,13 +143,14 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
         - elevation gain: \(Int(snapshot.elevationGain.rounded())) m
         - pace: \(paceText)
         - slope: \(decimal(snapshot.slopePercent, digits: 1))%
-        - heart rate: \(heartRateText)
-        - cadence: \(decimal(snapshot.cadence, digits: 2))
-        - fatigue score: \(Int(snapshot.fatigue.score.rounded()))
+        - heart rate: \(heartRateText) \(hrZoneText)
+        - accumulated load (TRIMP): \(decimal(snapshot.fatigue.accumulatedTrimp, digits: 1))
+        - fatigue capacity used: \(Int(snapshot.fatigue.score.rounded()))%
         - energy remaining: \(Int((snapshot.fatigue.energyRemaining * 100).rounded()))%
         - trail difficulty: \(Int(snapshot.trailDifficultyScore.rounded()))
         - terrain: \(snapshot.terrain.rawValue)
-        Give one immediate action for the next 2-5 minutes.
+        
+        Analyze physiological cost vs output. Give one immediate pacing or technique action.
         """
     }
 
@@ -205,6 +215,11 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
         let personalBestGainM: Double?
         let distanceDeltaPercent: Double?
         let fatigueDelta: Double?
+        
+        let accumulatedTrimp: Double
+        let trimpPerKm: Double
+        let historicalAvgTrimpPerKm: Double?
+        let efficiencyTrendPercent: Double?
     }
 
     private func buildPostHikeStats(
@@ -298,6 +313,27 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
         } else {
             fatigueDelta = nil
         }
+        
+        let accumulatedTrimp = session.finalFatigue.accumulatedTrimp
+        let trimpPerKm = distanceKm > 0 ? accumulatedTrimp / distanceKm : 0
+        
+        let historicalTrimps = historical.map(\.finalFatigue.accumulatedTrimp)
+        let historicalDistances = historical.map { $0.totalDistance / 1000 }
+        
+        // Calculate historical efficiency (TRIMP/km) safely
+        let historicalEfficiencies = zip(historicalTrimps, historicalDistances).compactMap { (trimp, dist) -> Double? in
+            dist > 0.1 ? trimp / dist : nil
+        }
+        let historicalAvgTrimpPerKm = average(of: historicalEfficiencies)
+        
+        let efficiencyTrendPercent: Double?
+        if let historicalAvg = historicalAvgTrimpPerKm, historicalAvg > 0 {
+            // Lower TRIMP/km is better efficiency.
+            // If current is 100 and historical is 120, change is (100-120)/120 = -16% (improvement in cost).
+            efficiencyTrendPercent = ((trimpPerKm - historicalAvg) / historicalAvg) * 100
+        } else {
+            efficiencyTrendPercent = nil
+        }
 
         return PostHikeStats(
             profile: profile,
@@ -347,7 +383,11 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
             personalBestDistanceKm: personalBestDistanceKm,
             personalBestGainM: personalBestGainM,
             distanceDeltaPercent: distanceDeltaPercent,
-            fatigueDelta: fatigueDelta
+            fatigueDelta: fatigueDelta,
+            accumulatedTrimp: accumulatedTrimp,
+            trimpPerKm: trimpPerKm,
+            historicalAvgTrimpPerKm: historicalAvgTrimpPerKm,
+            efficiencyTrendPercent: efficiencyTrendPercent
         )
     }
 
@@ -414,7 +454,7 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
     private func postHikePrompt(from stats: PostHikeStats, style: PostHikePromptStyle) -> String {
         let profileText: String
         if let profile = stats.profile {
-            profileText = "Age \(profile.age), weight \(Int(profile.weightKg.rounded())) kg, height \(Int(profile.heightCm.rounded())) cm, condition \(profile.condition.rawValue), fatigue multiplier \(decimal(profile.fatigueMultiplier, digits: 2))."
+            profileText = "Age \(profile.age), weight \(Int(profile.weightKg.rounded())) kg, height \(Int(profile.heightCm.rounded())) cm, condition \(profile.condition.rawValue). HR: Rest \(profile.restingHeartRate), Max \(profile.effectiveMaxHeartRate)."
         } else {
             profileText = "Profile unavailable."
         }
@@ -432,6 +472,17 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
             heartRateText = "Heart rate average \(Int(averageHeartRate.rounded())) bpm, max \(Int(maxHeartRate.rounded())) bpm."
         } else {
             heartRateText = "Heart rate unavailable."
+        }
+        
+        // Efficiency Analysis
+        let efficiencyText: String
+        if let efficiencyTrend = stats.efficiencyTrendPercent {
+            let trendSign = efficiencyTrend > 0 ? "+" : ""
+            // Lower TRIMP/km is better. Negative trend means improvement.
+            let interpretation = efficiencyTrend < -5 ? "efficiency improved (lower cost)" : (efficiencyTrend > 5 ? "efficiency dropped (higher cost)" : "efficiency stable")
+            efficiencyText = "Physiological cost: \(decimal(stats.trimpPerKm, digits: 1)) TRIMP/km. Baseline: \(decimal(stats.historicalAvgTrimpPerKm ?? 0, digits: 1)). Trend: \(trendSign)\(Int(efficiencyTrend.rounded()))% (\(interpretation))."
+        } else {
+            efficiencyText = "Physiological cost: \(decimal(stats.trimpPerKm, digits: 1)) TRIMP/km. No baseline for trend."
         }
 
         let historyText: String
@@ -481,17 +532,18 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
             Segment count \(stats.segmentCount), average slope \(decimal(stats.averageSlopePercent, digits: 1))%, steepest climb \(decimal(stats.steepestClimbPercent, digits: 1))%, steepest descent \(decimal(stats.steepestDescentPercent, digits: 1))%.
             Cadence average \(decimal(stats.averageCadence, digits: 2)), cadence max \(decimal(stats.maxCadence, digits: 2)).
             \(heartRateText)
-            Trail difficulty \(Int(stats.trailDifficultyScore.rounded())), fatigue score \(Int(stats.fatigueScore.rounded())), energy used \(Int(stats.energyUsedPercent.rounded()))%, energy remaining \(Int(stats.energyRemainingPercent.rounded()))%.
+            Trail difficulty \(Int(stats.trailDifficultyScore.rounded())), fatigue score \(Int(stats.fatigueScore.rounded())), Accumulated TRIMP \(Int(stats.accumulatedTrimp.rounded())), energy used \(Int(stats.energyUsedPercent.rounded()))%, energy remaining \(Int(stats.energyRemainingPercent.rounded()))%.
             \(routeText)
             \(terrainText)
             \(splitText)
             \(safetyText)
 
-            History baseline:
+            History & Efficiency:
             \(historyText)
+            \(efficiencyText)
 
             Build exactly three actionable insights:
-            1) pacing and effort management
+            1) pacing and effort management (cite progress/efficiency if relevant)
             2) terrain handling technique
             3) recovery readiness for next 24 hours
             """
@@ -499,14 +551,15 @@ final class AppleIntelligenceNarratorService: AppleIntelligenceService {
             return """
             Reply only in English (United States). Return exactly 3 lines as Title|Detail.
             Profile: \(profileText)
-            Hike: \(Int(stats.durationMinutes.rounded())) min, \(decimal(stats.distanceKm, digits: 2)) km, \(Int(stats.elevationGainM.rounded())) m gain, pace \(stats.averagePaceText), fatigue \(Int(stats.fatigueScore.rounded())), energy remaining \(Int(stats.energyRemainingPercent.rounded()))%, difficulty \(Int(stats.trailDifficultyScore.rounded())).
+            Hike: \(Int(stats.durationMinutes.rounded())) min, \(decimal(stats.distanceKm, digits: 2)) km, \(Int(stats.elevationGainM.rounded())) m gain, pace \(stats.averagePaceText), TRIMP \(Int(stats.accumulatedTrimp.rounded())), energy remaining \(Int(stats.energyRemainingPercent.rounded()))%, difficulty \(Int(stats.trailDifficultyScore.rounded())).
             Terrain: climb \(Int(stats.climbPercent.rounded()))%, downhill \(Int(stats.downhillPercent.rounded()))%, technical \(Int(stats.technicalPercent.rounded()))%, flat \(Int(stats.flatPercent.rounded()))%, dominant \(stats.dominantTerrain.rawValue), steepest climb \(decimal(stats.steepestClimbPercent, digits: 1))%.
             Splits: first-half speed \(decimal(stats.firstHalfSpeed, digits: 2)) vs second-half speed \(decimal(stats.secondHalfSpeed, digits: 2)) m/s.
             Route: \(routeText)
             \(heartRateText)
             History: \(historyText)
+            Efficiency: \(efficiencyText)
             Safety: \(safetyText)
-            Make three insights: pacing, terrain, and recovery.
+            Make three insights: pacing (cite efficiency), terrain, and recovery.
             """
         }
     }

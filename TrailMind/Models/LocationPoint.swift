@@ -8,6 +8,7 @@ struct LocationPoint: Identifiable, Codable {
     let altitude: Double
     let speed: Double
     let horizontalAccuracy: Double
+    let verticalAccuracy: Double
 
     init(location: CLLocation) {
         self.id = UUID()
@@ -16,6 +17,7 @@ struct LocationPoint: Identifiable, Codable {
         self.altitude = location.altitude
         self.speed = max(location.speed, 0)
         self.horizontalAccuracy = location.horizontalAccuracy
+        self.verticalAccuracy = location.verticalAccuracy
     }
 
     init(
@@ -25,7 +27,8 @@ struct LocationPoint: Identifiable, Codable {
         longitude: Double,
         altitude: Double,
         speed: Double,
-        horizontalAccuracy: Double = 5
+        horizontalAccuracy: Double = 5,
+        verticalAccuracy: Double = 5
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -33,6 +36,7 @@ struct LocationPoint: Identifiable, Codable {
         self.altitude = altitude
         self.speed = speed
         self.horizontalAccuracy = horizontalAccuracy
+        self.verticalAccuracy = verticalAccuracy
     }
 
     enum CodingKeys: String, CodingKey {
@@ -43,6 +47,7 @@ struct LocationPoint: Identifiable, Codable {
         case altitude
         case speed
         case horizontalAccuracy
+        case verticalAccuracy
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +60,7 @@ struct LocationPoint: Identifiable, Codable {
         altitude = try container.decode(Double.self, forKey: .altitude)
         speed = try container.decode(Double.self, forKey: .speed)
         horizontalAccuracy = try container.decode(Double.self, forKey: .horizontalAccuracy)
+        verticalAccuracy = try container.decodeIfPresent(Double.self, forKey: .verticalAccuracy) ?? -1.0
     }
 
     func encode(to encoder: Encoder) throws {

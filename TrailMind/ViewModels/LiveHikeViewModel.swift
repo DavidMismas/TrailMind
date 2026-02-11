@@ -344,20 +344,15 @@ final class LiveHikeViewModel: ObservableObject {
     }
 
     private func refreshFatigue() {
-        var updated = fatigueService.evaluate(
+        let updated = fatigueService.evaluate(
             previous: fatigueState,
             elapsed: elapsed,
             speed: speed,
             slopePercent: slopePercent,
             heartRate: heartRate ?? 0,
-            cadence: cadence
+            cadence: cadence,
+            profile: profileStore.profile
         )
-
-        if let profile = profileStore.profile {
-            let adjustedScore = min(100, max(0, updated.score * profile.fatigueMultiplier))
-            updated.score = adjustedScore
-            updated.energyRemaining = max(0, 1 - adjustedScore / 100)
-        }
 
         fatigueState = updated
     }
