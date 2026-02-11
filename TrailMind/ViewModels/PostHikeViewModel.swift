@@ -136,16 +136,28 @@ final class PostHikeViewModel: ObservableObject {
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel.default
+            let currentLocale = Locale.current
+            let normalizedLocaleIdentifier = normalizedLocaleIdentifier(from: currentLocale.identifier)
+            let normalizedLocale = normalizedLocaleIdentifier == currentLocale.identifier
+                ? currentLocale
+                : Locale(identifier: normalizedLocaleIdentifier)
+            let supportsCurrentLocale = model.supportsLocale(currentLocale)
+            let supportsNormalizedLocale = model.supportsLocale(normalizedLocale)
+            let hasRegionOverride = hasRegionOverride(in: currentLocale.identifier)
 
             switch model.availability {
             case .available:
-                if !model.supportsLocale() {
-                    return "Current system language is not supported by Apple Intelligence on this device."
+                if !supportsCurrentLocale && supportsNormalizedLocale {
+                    return "Your device Region setting is causing a conflict with Apple Intelligence. Go to Settings → General → Language & Region → Region and set it to United States (or any English-speaking region)."
                 }
-                // supportsLocale() may still pass when Locale.current carries Unicode extensions
-                // like @rg= (region override), which FoundationModels rejects at session time.
-                // Check for this known iOS 26 beta issue.
-                if Locale.current.identifier.contains("@") {
+
+                if !supportsCurrentLocale && !supportsNormalizedLocale {
+                    return "Current system language/region (\(currentLocale.identifier)) is not supported by Apple Intelligence on this device."
+                }
+
+                // Region override tags like @rg=... or -u-...-rg-... can trip
+                // FoundationModels in session creation on some iOS 26 builds.
+                if hasRegionOverride {
                     return "Your device Region setting is causing a conflict with Apple Intelligence. Go to Settings → General → Language & Region → Region and set it to United States (or any English-speaking region)."
                 }
                 return "Apple Intelligence responded with no usable output. Try again."
@@ -164,5 +176,24 @@ final class PostHikeViewModel: ObservableObject {
         }
 #endif
         return "Apple Intelligence runtime is unavailable on this build."
+    }
+
+    private func normalizedLocaleIdentifier(from identifier: String) -> String {
+        var normalized = identifier
+        if let atIndex = normalized.firstIndex(of: "@") {
+            normalized = String(normalized[..<atIndex])
+        }
+        if let extensionRange = normalized.range(of: "-u-", options: [.regularExpression, .caseInsensitive]) {
+            normalized = String(normalized[..<extensionRange.lowerBound])
+        }
+        return normalized
+    }
+
+    private func hasRegionOverride(in identifier: String) -> Bool {
+        let lower = identifier.lowercased()
+        if lower.contains("@rg=") {
+            return true
+        }
+        return lower.range(of: "-u-.*-rg-", options: [.regularExpression]) != nil
     }
 }
