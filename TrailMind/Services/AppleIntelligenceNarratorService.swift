@@ -3,14 +3,15 @@ import Foundation
 import FoundationModels
 #endif
 
-struct AppleIntelligenceNarratorService: AppleIntelligenceService {
+final class AppleIntelligenceNarratorService: AppleIntelligenceService {
+
     func liveInsight(from snapshot: LiveMetricsSnapshot, profile: UserProfile?) async -> String {
         let fallback = fallbackLiveInsight(from: snapshot)
 
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel.default
-            guard model.isAvailable else { return fallback }
+            guard model.isAvailable, model.supportsLocale(Locale.current) else { return fallback }
 
             let session = LanguageModelSession(model: model) {
                 """
@@ -30,11 +31,11 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
                 let cleaned = cleanSingleLine(response.content)
                 return cleaned.isEmpty ? fallback : cleaned
             } catch {
+                print("[AI] liveInsight error: \(error)")
                 return fallback
             }
         }
 #endif
-
         return fallback
     }
 
@@ -43,10 +44,18 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
         historicalSessions: [HikeSession],
         profile: UserProfile?
     ) async -> [PerformanceInsight]? {
+        // Require at least some meaningful hike data before calling the model.
+        // An all-zero session (e.g. a demo/empty hike) triggers content guardrails.
+        guard session.totalDistance > 0 || session.totalElevationGain > 0 || session.duration > 0 else {
+            print("[AI] postHike skipped — empty hike session")
+            return nil
+        }
+
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel.default
-            guard model.isAvailable else { return nil }
+            print("[AI] postHike isAvailable=\(model.isAvailable) supportsLocale=\(model.supportsLocale(Locale.current)) availability=\(model.availability)")
+            guard model.isAvailable, model.supportsLocale(Locale.current) else { return nil }
 
             let lmSession = LanguageModelSession(model: model) {
                 """
@@ -59,25 +68,27 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
                 """
             }
 
+            let promptText = postHikePrompt(session: session, historical: historicalSessions, profile: profile)
+            print("[AI] postHike full prompt:\n\(promptText)")
+
             do {
                 let response = try await lmSession.respond(
-                    to: postHikePrompt(session: session, historical: historicalSessions, profile: profile),
+                    to: promptText,
                     options: GenerationOptions(temperature: 0.25, maximumResponseTokens: 260)
                 )
                 let rawOutput = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                print("[AI] postHike raw output: \(rawOutput)")
                 let parsed = parseInsights(from: rawOutput)
-                if !parsed.isEmpty {
-                    return parsed
-                }
-
+                if !parsed.isEmpty { return parsed }
                 let fallback = fallbackInsights(from: rawOutput)
+                print("[AI] postHike parsed=\(parsed.count) fallback=\(fallback.count)")
                 return fallback.isEmpty ? nil : fallback
             } catch {
+                print("[AI] postHike error: \(error)")
                 return nil
             }
         }
 #endif
-
         return nil
     }
 
@@ -223,29 +234,17 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
     }
 
     private func parseInsightLine(_ line: String) -> PerformanceInsight? {
-        if let insight = insight(line, separatedBy: "|") {
-            return insight
-        }
-
-        if let insight = insight(line, separatedBy: ":") {
-            return insight
-        }
-
-        if let insight = insight(line, separatedBy: " - ") {
-            return insight
-        }
-
+        if let insight = insight(line, separatedBy: "|") { return insight }
+        if let insight = insight(line, separatedBy: ":") { return insight }
+        if let insight = insight(line, separatedBy: " - ") { return insight }
         return nil
     }
 
     private func insight(_ line: String, separatedBy separator: String) -> PerformanceInsight? {
         guard let range = line.range(of: separator) else { return nil }
-
         let title = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
         let detail = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-
         guard isValidInsightTitle(title), detail.count > 10 else { return nil }
-
         return PerformanceInsight(
             title: String(title.prefix(40)),
             detail: String(detail.prefix(140))
@@ -271,16 +270,9 @@ struct AppleIntelligenceNarratorService: AppleIntelligenceService {
 
     private func fallbackTitle(for sentence: String, index: Int) -> String {
         let lower = sentence.lowercased()
-        if lower.contains("recover") || lower.contains("rest") || lower.contains("readiness") {
-            return "Recovery"
-        }
-        if lower.contains("terrain") || lower.contains("climb") || lower.contains("downhill") {
-            return "Terrain"
-        }
-        if lower.contains("pace") || lower.contains("fatigue") || lower.contains("effort") {
-            return "Pacing"
-        }
-
+        if lower.contains("recover") || lower.contains("rest") || lower.contains("readiness") { return "Recovery" }
+        if lower.contains("terrain") || lower.contains("climb") || lower.contains("downhill") { return "Terrain" }
+        if lower.contains("pace") || lower.contains("fatigue") || lower.contains("effort") { return "Pacing" }
         let defaults = ["Pacing", "Terrain", "Recovery"]
         return defaults[min(index, defaults.count - 1)]
     }

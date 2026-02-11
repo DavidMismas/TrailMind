@@ -137,12 +137,17 @@ final class PostHikeViewModel: ObservableObject {
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel.default
 
-            if !model.supportsLocale() {
-                return "Current system language is not supported by Apple Intelligence on this device."
-            }
-
             switch model.availability {
             case .available:
+                if !model.supportsLocale() {
+                    return "Current system language is not supported by Apple Intelligence on this device."
+                }
+                // supportsLocale() may still pass when Locale.current carries Unicode extensions
+                // like @rg= (region override), which FoundationModels rejects at session time.
+                // Check for this known iOS 26 beta issue.
+                if Locale.current.identifier.contains("@") {
+                    return "Your device Region setting is causing a conflict with Apple Intelligence. Go to Settings → General → Language & Region → Region and set it to United States (or any English-speaking region)."
+                }
                 return "Apple Intelligence responded with no usable output. Try again."
             case .unavailable(let reason):
                 switch reason {

@@ -38,6 +38,8 @@
 	<string>TrailMind tracks GPS and elevation during your hike.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>TrailMind reads cadence to estimate pace and terrain stress.</string>
+	<key>NSAppleIntelligenceEnabled</key>
+	<true/>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
