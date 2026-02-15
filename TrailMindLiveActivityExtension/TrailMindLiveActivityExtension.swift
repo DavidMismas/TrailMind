@@ -21,7 +21,7 @@ struct Provider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
         let entry = SimpleEntry(date: Date(), mirror: resolvedState())
-        let refreshDate = Date().addingTimeInterval(15)
+        let refreshDate = Date().addingTimeInterval(5)
         let timeline = Timeline(entries: [entry], policy: .after(refreshDate))
         completion(timeline)
     }
@@ -37,8 +37,8 @@ struct Provider: TimelineProvider {
                     startedAt: activity.attributes.startedAt,
                     elapsedSeconds: activity.content.state.elapsedSeconds,
                     distanceMeters: activity.content.state.distanceMeters,
-                    currentAltitudeMeters: 0,
-                    elevationGainMeters: 0,
+                    currentAltitudeMeters: activity.content.state.currentAltitudeMeters,
+                    elevationGainMeters: activity.content.state.elevationGainMeters,
                     altitudeSamples: [],
                     isTracking: true,
                     updatedAt: Date()
@@ -98,6 +98,12 @@ struct TrailMindLiveActivityExtensionEntryView: View {
                             .monospacedDigit()
                     }
                 }
+
+                if let updatedAt = mirror.updatedAt {
+                    Text("Updated \(updatedAt, style: .relative)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Text("No active hike")
                     .font(.subheadline)
@@ -152,6 +158,14 @@ struct TrailMindLiveActivityExtensionEntryView: View {
                     height: graphHeight,
                     showScaleLabels: !compact
                 )
+
+                if let updatedAt = mirror.updatedAt {
+                    Text("Updated \(updatedAt, style: .relative)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
             .padding(compact ? 10 : 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

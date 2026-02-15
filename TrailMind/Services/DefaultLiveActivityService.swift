@@ -10,6 +10,8 @@ struct TrailMindHikeLiveActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var elapsedSeconds: Int
         var distanceMeters: Double
+        var currentAltitudeMeters: Double
+        var elevationGainMeters: Double
     }
 
     var startedAt: Date
@@ -40,7 +42,7 @@ final class DefaultLiveActivityService: LiveActivityService {
 
 #if canImport(WidgetKit)
     private var lastWidgetReloadAt: Date?
-    private let widgetReloadInterval: TimeInterval = 20
+    private let widgetReloadInterval: TimeInterval = 5
 #endif
 
     func start(
@@ -51,7 +53,12 @@ final class DefaultLiveActivityService: LiveActivityService {
         elevationGainMeters: Double,
         altitudeSamples: [LiveAltitudeSample]
     ) {
-        let state = makeState(elapsed: elapsed, distanceMeters: distanceMeters)
+        let state = makeState(
+            elapsed: elapsed,
+            distanceMeters: distanceMeters,
+            currentAltitudeMeters: currentAltitudeMeters,
+            elevationGainMeters: elevationGainMeters
+        )
         saveMirror(
             MirrorState(
                 startedAt: startedAt,
@@ -101,7 +108,12 @@ final class DefaultLiveActivityService: LiveActivityService {
         elevationGainMeters: Double,
         altitudeSamples: [LiveAltitudeSample]
     ) {
-        let state = makeState(elapsed: elapsed, distanceMeters: distanceMeters)
+        let state = makeState(
+            elapsed: elapsed,
+            distanceMeters: distanceMeters,
+            currentAltitudeMeters: currentAltitudeMeters,
+            elevationGainMeters: elevationGainMeters
+        )
         saveMirror(
             MirrorState(
                 startedAt: startedAt,
@@ -140,7 +152,12 @@ final class DefaultLiveActivityService: LiveActivityService {
         elevationGainMeters: Double,
         altitudeSamples: [LiveAltitudeSample]
     ) {
-        let state = makeState(elapsed: elapsed, distanceMeters: distanceMeters)
+        let state = makeState(
+            elapsed: elapsed,
+            distanceMeters: distanceMeters,
+            currentAltitudeMeters: currentAltitudeMeters,
+            elevationGainMeters: elevationGainMeters
+        )
         saveMirror(
             MirrorState(
                 startedAt: startedAt,
@@ -175,10 +192,17 @@ final class DefaultLiveActivityService: LiveActivityService {
 #endif
     }
 
-    private func makeState(elapsed: TimeInterval, distanceMeters: Double) -> TrailMindHikeLiveActivityAttributes.ContentState {
+    private func makeState(
+        elapsed: TimeInterval,
+        distanceMeters: Double,
+        currentAltitudeMeters: Double,
+        elevationGainMeters: Double
+    ) -> TrailMindHikeLiveActivityAttributes.ContentState {
         TrailMindHikeLiveActivityAttributes.ContentState(
             elapsedSeconds: max(0, Int(elapsed.rounded())),
-            distanceMeters: max(0, distanceMeters)
+            distanceMeters: max(0, distanceMeters),
+            currentAltitudeMeters: currentAltitudeMeters,
+            elevationGainMeters: max(0, elevationGainMeters)
         )
     }
 
@@ -224,7 +248,6 @@ final class DefaultLiveActivityService: LiveActivityService {
             return
         }
         WidgetCenter.shared.reloadTimelines(ofKind: "TrailMindLiveActivityExtension")
-        WidgetCenter.shared.reloadAllTimelines()
         lastWidgetReloadAt = now
 #endif
     }

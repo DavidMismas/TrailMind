@@ -1,10 +1,3 @@
-//
-//  TrailMindWatchApp.swift
-//  TrailMindWatch Watch App
-//
-//  Created by David Mišmaš on 11. 2. 26.
-//
-
 import SwiftUI
 
 @main

@@ -60,7 +60,7 @@ struct DefaultPostHikeAnalysisService: PostHikeAnalysisService {
     }
 
     private func trendText(current: Double, historical: [HikeSession]) -> String {
-        guard !historical.isEmpty else { return "Baseline established" }
+        guard !historical.isEmpty else { return "Baseline established (add one more hike for trend)" }
         let historicalAvg = historical.map(\.finalFatigue.score).average
         if current < historicalAvg {
             return "Improving fatigue tolerance"

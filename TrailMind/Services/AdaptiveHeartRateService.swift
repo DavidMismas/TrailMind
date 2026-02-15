@@ -36,7 +36,7 @@ final class AdaptiveHeartRateService: HeartRateService, BluetoothHeartRateContro
     }
 
     init(
-        healthKitService: HealthKitHeartRateService = HealthKitHeartRateService(),
+        healthKitService: HealthKitHeartRateService,
         bluetoothService: BluetoothHeartRateService = BluetoothHeartRateService(),
         preferencesStore: HeartRatePreferencesStore = HeartRatePreferencesStore()
     ) {

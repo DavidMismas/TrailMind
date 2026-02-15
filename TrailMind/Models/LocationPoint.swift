@@ -72,5 +72,6 @@ struct LocationPoint: Identifiable, Codable {
         try container.encode(altitude, forKey: .altitude)
         try container.encode(speed, forKey: .speed)
         try container.encode(horizontalAccuracy, forKey: .horizontalAccuracy)
+        try container.encode(verticalAccuracy, forKey: .verticalAccuracy)
     }
 }

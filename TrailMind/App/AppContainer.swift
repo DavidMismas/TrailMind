@@ -6,7 +6,10 @@ final class AppContainer {
     let profileStore = UserProfileStore()
 
     private let locationService = CLLocationTrackingService()
-    private let heartRateService = AdaptiveHeartRateService()
+
+    private let watchConnectivityService = DefaultWatchConnectivityService()
+    private lazy var healthKitService = HealthKitHeartRateService(watchConnectivityService: watchConnectivityService)
+    private lazy var heartRateService = AdaptiveHeartRateService(healthKitService: healthKitService)
     private let cadenceService = MotionCadenceService()
     private let batteryService = DeviceBatteryMonitorService()
     private let fatigueService = DefaultFatigueScoringService()
@@ -40,7 +43,9 @@ final class AppContainer {
         cacheService: cacheService,
         activeHikeStore: activeHikeStore,
         premiumService: premiumService,
-        profileStore: profileStore
+
+        profileStore: profileStore,
+        watchConnectivityService: watchConnectivityService
     )
 
     lazy var postHikeViewModel = PostHikeViewModel(

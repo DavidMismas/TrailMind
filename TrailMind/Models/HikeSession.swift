@@ -43,7 +43,11 @@ struct HikeSession: Identifiable, Codable {
     }
 
     var duration: TimeInterval {
-        endedAt.timeIntervalSince(startedAt)
+        let movingDuration = segments.reduce(0) { $0 + max(0, $1.duration) }
+        if movingDuration > 0 {
+            return movingDuration
+        }
+        return max(0, endedAt.timeIntervalSince(startedAt))
     }
 
     var trailDifficultyScore: Double {

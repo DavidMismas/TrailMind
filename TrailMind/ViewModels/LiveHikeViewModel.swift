@@ -21,6 +21,7 @@ final class LiveHikeViewModel: ObservableObject {
     @Published private(set) var terrainSafetyHint: String = ""
     @Published private(set) var aiInsight: String = "Apple Intelligence insights appear during active tracking."
     @Published private(set) var isTracking = false
+    @Published private(set) var isPaused = false
     @Published private(set) var premiumTier: PremiumTier = .free
     @Published private(set) var currentAltitude: Double = 0
 
@@ -37,6 +38,7 @@ final class LiveHikeViewModel: ObservableObject {
     private let cacheService: OfflineTrailCacheService
     private let activeHikeStore: ActiveHikeStatePersistenceService
     private let profileStore: UserProfileStore
+    private let watchConnectivityService: WatchConnectivityService
 
     private var startDate: Date?
     private var lastCheckIn = Date()
@@ -46,6 +48,9 @@ final class LiveHikeViewModel: ObservableObject {
     private var lastAIRequestAt: Date?
     private var lastHeartRateSampleAt: Date?
     private var lastCheckpointSavedAt: Date?
+    private var pausedAccumulatedSeconds: TimeInterval = 0
+    private var pausedStartedAt: Date?
+    private var lastFilteredAltitude: Double?
 
     private let maxInMemoryRoutePoints = 4000
     private let maxInMemorySegments = 6000
@@ -53,9 +58,12 @@ final class LiveHikeViewModel: ObservableObject {
     private let memoryWarningSegments = 2200
     private let heartRateStaleAfter: TimeInterval = 25
     private let checkpointSaveInterval: TimeInterval = 4
-    private let liveActivityUpdateInterval: TimeInterval = 8
-    private let liveActivityDistanceDelta: Double = 8
+    private let liveActivityUpdateInterval: TimeInterval = 3
+    private let liveActivityDistanceDelta: Double = 2
     private let maxWidgetAltitudeSamples = 90
+    private let maxReliableVerticalAccuracy: Double = 16
+    private let minAltitudeStepMeters: Double = 1.4
+    private let maxVerticalSpeedMetersPerSecond: Double = 4.5
 
     private var lastLiveActivityUpdateAt: Date?
     private var lastLiveActivityDistanceMeters: Double = 0
@@ -74,7 +82,9 @@ final class LiveHikeViewModel: ObservableObject {
         cacheService: OfflineTrailCacheService,
         activeHikeStore: ActiveHikeStatePersistenceService,
         premiumService: PremiumPurchaseService,
-        profileStore: UserProfileStore
+
+        profileStore: UserProfileStore,
+        watchConnectivityService: WatchConnectivityService
     ) {
         self.sessionStore = sessionStore
         self.locationService = locationService
@@ -89,6 +99,7 @@ final class LiveHikeViewModel: ObservableObject {
         self.cacheService = cacheService
         self.activeHikeStore = activeHikeStore
         self.profileStore = profileStore
+        self.watchConnectivityService = watchConnectivityService
 
         locationService.locationPublisher
             .receive(on: DispatchQueue.main)
@@ -156,6 +167,15 @@ final class LiveHikeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        watchConnectivityService.commandPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] command in
+                self?.handleWatchCommand(command)
+            }
+            .store(in: &cancellables)
+            
+        watchConnectivityService.start()
+
         restoreActiveHikeIfNeeded()
     }
 
@@ -164,12 +184,31 @@ final class LiveHikeViewModel: ObservableObject {
         guard premiumTier.hasEnergyPrediction else { return "Premium unlocks energy-to-goal prediction." }
 
         if fatigueState.energyRemaining > 0.55 {
+            if fatigueState.caloriesConsumed <= 0, elapsed > 45 * 60 {
+                return "Energy looks stable. Consider a small carb intake before the next long climb."
+            }
             return "Likely enough energy for the current route."
         }
         if fatigueState.energyRemaining > 0.3 {
             return "Energy is moderate. Plan a short break soon."
         }
         return "Energy is low. Consider turning back early."
+    }
+
+    var estimatedCaloriesBurnedText: String {
+        "\(Int(fatigueState.estimatedCaloriesBurned.rounded())) kcal burned"
+    }
+
+    var consumedCaloriesText: String {
+        "\(Int(fatigueState.caloriesConsumed.rounded())) kcal consumed"
+    }
+
+    var netEnergyText: String {
+        let net = fatigueState.caloriesConsumed - fatigueState.estimatedCaloriesBurned
+        if net >= 0 {
+            return "+\(Int(net.rounded())) kcal net"
+        }
+        return "\(Int(net.rounded())) kcal net"
     }
 
     var heartRateDisplayValue: String {
@@ -202,6 +241,7 @@ final class LiveHikeViewModel: ObservableObject {
 
         activeHikeStore.clear()
         isTracking = true
+        isPaused = false
         startDate = Date()
         lastCheckIn = Date()
         elapsed = 0
@@ -220,6 +260,9 @@ final class LiveHikeViewModel: ObservableObject {
         lastCheckpointSavedAt = nil
         lastLiveActivityUpdateAt = nil
         lastLiveActivityDistanceMeters = 0
+        pausedAccumulatedSeconds = 0
+        pausedStartedAt = nil
+        lastFilteredAltitude = nil
         currentAltitude = 0
 
         if let startDate {
@@ -234,14 +277,20 @@ final class LiveHikeViewModel: ObservableObject {
         }
         startLiveServices()
         persistCheckpoint(force: true)
+        
+        watchConnectivityService.send(.startHike)
     }
 
     func stopHike() {
         guard isTracking, let startDate else { return }
 
+        let stopTimestamp = Date()
+        let finalElapsed = elapsedAt(stopTimestamp)
+        elapsed = finalElapsed
         isTracking = false
+        isPaused = false
+        pausedStartedAt = nil
         stopLiveServices()
-        let finalElapsed = Date().timeIntervalSince(startDate)
         let finalDistance = totalDistance
         liveActivityService.stop(
             startedAt: startDate,
@@ -257,10 +306,12 @@ final class LiveHikeViewModel: ObservableObject {
         lastCheckpointSavedAt = nil
         lastLiveActivityUpdateAt = nil
         lastLiveActivityDistanceMeters = 0
+        pausedAccumulatedSeconds = 0
+        lastFilteredAltitude = nil
 
         let session = HikeSession(
             startedAt: startDate,
-            endedAt: Date(),
+            endedAt: stopTimestamp,
             route: route,
             segments: segments,
             finalFatigue: fatigueState,
@@ -269,6 +320,8 @@ final class LiveHikeViewModel: ObservableObject {
         sessionStore.add(session)
         cacheService.cache(route: route, sessionID: session.id)
         activeHikeStore.clear()
+        
+        watchConnectivityService.send(.stopHike)
     }
 
     func markSafetyCheckIn() {
@@ -277,10 +330,59 @@ final class LiveHikeViewModel: ObservableObject {
         persistCheckpoint(force: true)
     }
 
+    func pauseHike() {
+        guard isTracking, !isPaused else { return }
+        elapsed = elapsedAt(Date())
+        isPaused = true
+        pausedStartedAt = Date()
+        speed = 0
+        slopePercent = 0
+        pacingAdvice = "Tracking paused."
+        refreshSafety()
+        updateLiveActivityIfNeeded(force: true)
+        persistCheckpoint(force: true)
+    }
+
+    func resumeHike() {
+        guard isTracking, isPaused else { return }
+        if let pausedStartedAt {
+            pausedAccumulatedSeconds += max(0, Date().timeIntervalSince(pausedStartedAt))
+        }
+        isPaused = false
+        self.pausedStartedAt = nil
+        elapsed = elapsedAt(Date())
+        lastPoint = nil
+        pacingAdvice = "Resumed. Move to refresh pace guidance."
+        refreshSafety()
+        updateLiveActivityIfNeeded(force: true)
+        persistCheckpoint(force: true)
+    }
+
+    func logCalories(_ calories: Double) {
+        guard isTracking else { return }
+        let intake = max(0, calories)
+        guard intake > 0 else { return }
+
+        elapsed = elapsedAt(Date())
+        fatigueState.caloriesConsumed += intake
+        refreshFatigue()
+        refreshSafety()
+        persistCheckpoint(force: true)
+    }
+
     private func consume(_ point: LocationPoint) {
         guard isTracking else { return }
+        elapsed = elapsedAt(point.timestamp)
 
-        currentAltitude = point.altitude
+        let previousFilteredAltitude = lastFilteredAltitude
+        let filteredAltitude = filteredAltitude(for: point, previousFilteredAltitude: previousFilteredAltitude)
+        currentAltitude = filteredAltitude
+
+        if isPaused {
+            lastFilteredAltitude = filteredAltitude
+            persistCheckpoint(force: false)
+            return
+        }
 
         route.append(point)
         if route.count > maxInMemoryRoutePoints {
@@ -289,6 +391,7 @@ final class LiveHikeViewModel: ObservableObject {
 
         guard let previous = lastPoint else {
             lastPoint = point
+            lastFilteredAltitude = filteredAltitude
             persistCheckpoint(force: false)
             return
         }
@@ -305,8 +408,11 @@ final class LiveHikeViewModel: ObservableObject {
 
         let time = max(1, point.timestamp.timeIntervalSince(previous.timestamp))
         let segmentSpeed = distance / time
-        let elevationGain = point.altitude - previous.altitude
-        let slope = distance > 0 ? (elevationGain / distance) * 100 : 0
+        let baselineAltitude = previousFilteredAltitude ?? previous.altitude
+        let rawVerticalDelta = filteredAltitude - baselineAltitude
+        let cappedVerticalDelta = cappedAltitudeDelta(rawVerticalDelta, duration: time)
+        let verticalDelta = filteredVerticalDelta(cappedVerticalDelta)
+        let slope = distance > 0 ? (verticalDelta / distance) * 100 : 0
 
         speed = segmentSpeed
         slopePercent = slope
@@ -322,7 +428,7 @@ final class LiveHikeViewModel: ObservableObject {
                 endedAt: point.timestamp,
                 duration: time,
                 distance: distance,
-                elevationGain: elevationGain,
+                elevationGain: verticalDelta,
                 slopePercent: slope,
                 averageSpeed: segmentSpeed,
                 heartRate: heartRate ?? 0,
@@ -341,6 +447,7 @@ final class LiveHikeViewModel: ObservableObject {
         persistCheckpoint(force: false)
 
         lastPoint = point
+        lastFilteredAltitude = filteredAltitude
     }
 
     private func refreshFatigue() {
@@ -376,6 +483,7 @@ final class LiveHikeViewModel: ObservableObject {
 
     private func refreshAIIfNeeded() {
         guard isTracking else { return }
+        guard !isPaused else { return }
 
         if !premiumTier.hasTerrainIntelligence {
             aiInsight = "Premium unlocks Apple Intelligence terrain and fatigue interpretation."
@@ -442,8 +550,8 @@ final class LiveHikeViewModel: ObservableObject {
         clockTicker = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                guard let self, let startDate else { return }
-                elapsed = Date().timeIntervalSince(startDate)
+                guard let self, self.startDate != nil else { return }
+                elapsed = elapsedAt(Date())
                 refreshHeartRateAvailability()
                 refreshSafety()
                 updateLiveActivityIfNeeded(force: false)
@@ -475,7 +583,11 @@ final class LiveHikeViewModel: ObservableObject {
             pacingAdvice: pacingAdvice,
             terrainSafetyHint: terrainSafetyHint,
             aiInsight: aiInsight,
-            currentAltitude: currentAltitude
+            currentAltitude: currentAltitude,
+            isPaused: isPaused,
+            pausedAccumulatedSeconds: pausedAccumulatedSeconds,
+            pausedStartedAt: pausedStartedAt,
+            lastFilteredAltitude: lastFilteredAltitude
         )
         activeHikeStore.save(checkpoint)
         lastCheckpointSavedAt = Date()
@@ -486,6 +598,7 @@ final class LiveHikeViewModel: ObservableObject {
         guard let checkpoint = activeHikeStore.load() else { return }
 
         isTracking = true
+        isPaused = checkpoint.isPaused
         startDate = checkpoint.startedAt
         lastCheckIn = checkpoint.lastCheckIn
         route = checkpoint.route
@@ -495,14 +608,21 @@ final class LiveHikeViewModel: ObservableObject {
         cadence = checkpoint.cadence
         speed = checkpoint.speed
         slopePercent = checkpoint.slopePercent
+        if checkpoint.isPaused {
+            speed = 0
+            slopePercent = 0
+        }
         batteryLevel = checkpoint.batteryLevel
         terrain = checkpoint.terrain
         pacingAdvice = checkpoint.pacingAdvice
         terrainSafetyHint = checkpoint.terrainSafetyHint
         aiInsight = "Recovered active hike after app restart."
         currentAltitude = checkpoint.currentAltitude
-        elapsed = Date().timeIntervalSince(checkpoint.startedAt)
+        pausedAccumulatedSeconds = checkpoint.pausedAccumulatedSeconds
+        pausedStartedAt = checkpoint.pausedStartedAt ?? (checkpoint.isPaused ? Date() : nil)
+        elapsed = elapsedAt(Date())
         lastPoint = checkpoint.route.last
+        lastFilteredAltitude = checkpoint.lastFilteredAltitude ?? checkpoint.route.last?.altitude ?? checkpoint.currentAltitude
         heartRate = nil
         heartRateSourceLabel = "Reconnecting heart-rate source"
         lastHeartRateSampleAt = nil
@@ -536,7 +656,7 @@ final class LiveHikeViewModel: ObservableObject {
             }
         }
 
-        let liveElapsed = now.timeIntervalSince(startDate)
+        let liveElapsed = elapsedAt(now)
         liveActivityService.update(
             startedAt: startDate,
             elapsed: liveElapsed,
@@ -610,5 +730,64 @@ final class LiveHikeViewModel: ObservableObject {
         }
 
         return result
+    }
+
+    private func elapsedAt(_ date: Date) -> TimeInterval {
+        guard let startDate else { return 0 }
+        let livePausedSeconds: TimeInterval
+        if isPaused, let pausedStartedAt {
+            livePausedSeconds = max(0, date.timeIntervalSince(pausedStartedAt))
+        } else {
+            livePausedSeconds = 0
+        }
+        return max(0, date.timeIntervalSince(startDate) - pausedAccumulatedSeconds - livePausedSeconds)
+    }
+
+    private func filteredAltitude(
+        for point: LocationPoint,
+        previousFilteredAltitude: Double?
+    ) -> Double {
+        let hasReliableVerticalAccuracy = point.verticalAccuracy >= 0 && point.verticalAccuracy <= maxReliableVerticalAccuracy
+        guard hasReliableVerticalAccuracy else {
+            return previousFilteredAltitude ?? point.altitude
+        }
+
+        guard let previousFilteredAltitude else {
+            return point.altitude
+        }
+
+        let alpha = altitudeSmoothingAlpha(for: point.verticalAccuracy)
+        return previousFilteredAltitude + (point.altitude - previousFilteredAltitude) * alpha
+    }
+
+    private func altitudeSmoothingAlpha(for verticalAccuracy: Double) -> Double {
+        if verticalAccuracy <= 4 { return 0.45 }
+        if verticalAccuracy <= 8 { return 0.32 }
+        return 0.2
+    }
+
+    private func cappedAltitudeDelta(_ delta: Double, duration: TimeInterval) -> Double {
+        let maxDelta = maxVerticalSpeedMetersPerSecond * max(1, duration)
+        return min(max(delta, -maxDelta), maxDelta)
+    }
+
+    private func filteredVerticalDelta(_ delta: Double) -> Double {
+        if abs(delta) < minAltitudeStepMeters {
+            return 0
+        }
+        return delta
+    }
+
+    private func handleWatchCommand(_ command: WatchCommand) {
+        switch command {
+        case .startHike:
+            if !isTracking {
+                startHike()
+            }
+        case .stopHike:
+            if isTracking {
+                stopHike()
+            }
+        }
     }
 }

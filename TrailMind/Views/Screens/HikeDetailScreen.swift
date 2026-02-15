@@ -100,6 +100,8 @@ struct HikeDetailScreen: View {
                                 Text("Fatigue tolerance: \(report.fatigueToleranceTrend)")
                                 Text("Climb efficiency: \(Int(report.climbEfficiency))")
                                 Text("Terrain adaptation: \(Int(report.terrainAdaptation))")
+                                Text("Estimated burn: \(Int(session.finalFatigue.estimatedCaloriesBurned.rounded())) kcal")
+                                Text("In-hike fuel: \(Int(session.finalFatigue.caloriesConsumed.rounded())) kcal")
                             }
                             .font(.subheadline)
                             .foregroundStyle(Color.white.opacity(0.8))

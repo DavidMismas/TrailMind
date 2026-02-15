@@ -1,12 +1,23 @@
 import Foundation
 import HealthKit
 import Combine
+import WatchConnectivity
 
-final class HealthKitHeartRateService: HeartRateService {
+
+
+final class HealthKitHeartRateService: NSObject, HeartRateService {
     private let subject = PassthroughSubject<Double, Never>()
     private let sourceSubject = CurrentValueSubject<String, Never>("HealthKit")
     private let healthStore = HKHealthStore()
     private var activeQuery: HKAnchoredObjectQuery?
+    private let watchConnectivityService: WatchConnectivityService
+    private var cancellables = Set<AnyCancellable>()
+
+    init(watchConnectivityService: WatchConnectivityService) {
+        self.watchConnectivityService = watchConnectivityService
+        super.init()
+        bindWatchConnectivity()
+    }
 
     var heartRatePublisher: AnyPublisher<Double, Never> {
         subject.eraseToAnyPublisher()
@@ -27,8 +38,31 @@ final class HealthKitHeartRateService: HeartRateService {
 
         healthStore.requestAuthorization(toShare: [], read: [heartRateType]) { [weak self] granted, _ in
             guard let self, granted else { return }
+            
+            // Enable background delivery for heart rate updates
+            self.healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { success, error in
+                if let error {
+                    print("[HealthKit] Failed to enable background delivery: \(error.localizedDescription)")
+                } else {
+                    print("[HealthKit] Background delivery enabled: \(success)")
+                }
+            }
+            
+            
             self.startHeartRateQuery(type: heartRateType)
         }
+        
+
+    }
+    
+    private func bindWatchConnectivity() {
+        watchConnectivityService.heartRatePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] heartRate in
+                self?.subject.send(heartRate)
+                self?.sourceSubject.send("Apple Watch (Live)")
+            }
+            .store(in: &cancellables)
     }
 
     func stop() {
@@ -67,4 +101,7 @@ final class HealthKitHeartRateService: HeartRateService {
             self?.subject.send(bpm)
         }
     }
+    
+
 }
+

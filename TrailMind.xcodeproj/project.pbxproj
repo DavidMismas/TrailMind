@@ -7,12 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6311E49F2F3D17AE00A9CECF /* TrailMindWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6311E4952F3D17AD00A9CECF /* TrailMindWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		63CB669C2F38DEAD000A3DCF /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63CB669B2F38DEAD000A3DCF /* WidgetKit.framework */; };
 		63CB669E2F38DEAD000A3DCF /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63CB669D2F38DEAD000A3DCF /* SwiftUI.framework */; };
 		63CB66AB2F38DEAE000A3DCF /* TrailMindLiveActivityExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 63CB66992F38DEAD000A3DCF /* TrailMindLiveActivityExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		6311E49D2F3D17AE00A9CECF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 63CB62412F3878BA000A3DCF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6311E4942F3D17AD00A9CECF;
+			remoteInfo = "TrailMindWatch Watch App";
+		};
 		63CB66A92F38DEAE000A3DCF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 63CB62412F3878BA000A3DCF /* Project object */;
@@ -23,6 +31,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		6311E4A32F3D17AE00A9CECF /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				6311E49F2F3D17AE00A9CECF /* TrailMindWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		63CB66AC2F38DEAE000A3DCF /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -37,6 +56,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		6311E4952F3D17AD00A9CECF /* TrailMindWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TrailMindWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63CB62492F3878BA000A3DCF /* TrailMind.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrailMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		63CB66992F38DEAD000A3DCF /* TrailMindLiveActivityExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TrailMindLiveActivityExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		63CB669B2F38DEAD000A3DCF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -54,6 +74,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		6311E4962F3D17AD00A9CECF /* TrailMindWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "TrailMindWatch Watch App";
+			sourceTree = "<group>";
+		};
 		63CB624B2F3878BA000A3DCF /* TrailMind */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TrailMind;
@@ -70,6 +95,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		6311E4922F3D17AD00A9CECF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		63CB62462F3878BA000A3DCF /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -94,6 +126,7 @@
 			children = (
 				63CB624B2F3878BA000A3DCF /* TrailMind */,
 				63CB669F2F38DEAD000A3DCF /* TrailMindLiveActivityExtension */,
+				6311E4962F3D17AD00A9CECF /* TrailMindWatch Watch App */,
 				63CB669A2F38DEAD000A3DCF /* Frameworks */,
 				63CB624A2F3878BA000A3DCF /* Products */,
 			);
@@ -104,6 +137,7 @@
 			children = (
 				63CB62492F3878BA000A3DCF /* TrailMind.app */,
 				63CB66992F38DEAD000A3DCF /* TrailMindLiveActivityExtensionExtension.appex */,
+				6311E4952F3D17AD00A9CECF /* TrailMindWatch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -120,6 +154,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		6311E4942F3D17AD00A9CECF /* TrailMindWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6311E4A02F3D17AE00A9CECF /* Build configuration list for PBXNativeTarget "TrailMindWatch Watch App" */;
+			buildPhases = (
+				6311E4912F3D17AD00A9CECF /* Sources */,
+				6311E4922F3D17AD00A9CECF /* Frameworks */,
+				6311E4932F3D17AD00A9CECF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6311E4962F3D17AD00A9CECF /* TrailMindWatch Watch App */,
+			);
+			name = "TrailMindWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "TrailMindWatch Watch App";
+			productReference = 6311E4952F3D17AD00A9CECF /* TrailMindWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
 		63CB62482F3878BA000A3DCF /* TrailMind */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 63CB62542F3878BB000A3DCF /* Build configuration list for PBXNativeTarget "TrailMind" */;
@@ -128,11 +184,13 @@
 				63CB62462F3878BA000A3DCF /* Frameworks */,
 				63CB62472F3878BA000A3DCF /* Resources */,
 				63CB66AC2F38DEAE000A3DCF /* Embed Foundation Extensions */,
+				6311E4A32F3D17AE00A9CECF /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				63CB66AA2F38DEAE000A3DCF /* PBXTargetDependency */,
+				6311E49E2F3D17AE00A9CECF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				63CB624B2F3878BA000A3DCF /* TrailMind */,
@@ -176,6 +234,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					6311E4942F3D17AD00A9CECF = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					63CB62482F3878BA000A3DCF = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -200,11 +261,19 @@
 			targets = (
 				63CB62482F3878BA000A3DCF /* TrailMind */,
 				63CB66982F38DEAD000A3DCF /* TrailMindLiveActivityExtensionExtension */,
+				6311E4942F3D17AD00A9CECF /* TrailMindWatch Watch App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		6311E4932F3D17AD00A9CECF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		63CB62472F3878BA000A3DCF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -222,6 +291,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		6311E4912F3D17AD00A9CECF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		63CB62452F3878BA000A3DCF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -239,6 +315,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		6311E49E2F3D17AE00A9CECF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6311E4942F3D17AD00A9CECF /* TrailMindWatch Watch App */;
+			targetProxy = 6311E49D2F3D17AE00A9CECF /* PBXContainerItemProxy */;
+		};
 		63CB66AA2F38DEAE000A3DCF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 63CB66982F38DEAD000A3DCF /* TrailMindLiveActivityExtensionExtension */;
@@ -247,6 +328,80 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		6311E4A12F3D17AE00A9CECF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "TrailMindWatch Watch App/TrailMindWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = AX2Z5LF5SG;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TrailMindWatch;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "TrailMind Watch App reads heart rate and activity data.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "TrailMind Watch App saves hiking workouts to HealthKit.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.david.TrailMind;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.david.TrailMind.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Debug;
+		};
+		6311E4A22F3D17AE00A9CECF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "TrailMindWatch Watch App/TrailMindWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = AX2Z5LF5SG;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TrailMindWatch;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "TrailMind Watch App reads heart rate and activity data.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "TrailMind Watch App saves hiking workouts to HealthKit.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.david.TrailMind;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.david.TrailMind.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
 		63CB62522F3878BB000A3DCF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -375,7 +530,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = TrailMind/TrailMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AX2Z5LF5SG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -417,7 +572,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = TrailMind/TrailMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AX2Z5LF5SG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -459,7 +614,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrailMindLiveActivityExtension/TrailMindLiveActivityExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AX2Z5LF5SG;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrailMindLiveActivityExtension/Info.plist;
@@ -490,7 +645,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrailMindLiveActivityExtension/TrailMindLiveActivityExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AX2Z5LF5SG;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrailMindLiveActivityExtension/Info.plist;
@@ -517,6 +672,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		6311E4A02F3D17AE00A9CECF /* Build configuration list for PBXNativeTarget "TrailMindWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6311E4A12F3D17AE00A9CECF /* Debug */,
+				6311E4A22F3D17AE00A9CECF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		63CB62442F3878BA000A3DCF /* Build configuration list for PBXProject "TrailMind" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

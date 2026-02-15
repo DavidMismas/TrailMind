@@ -14,6 +14,21 @@ protocol HeartRateService: AnyObject {
     func stop()
 }
 
+
+enum WatchCommand: String, Codable {
+    case startHike = "START"
+    case stopHike = "STOP"
+}
+
+protocol WatchConnectivityService: AnyObject {
+    var heartRatePublisher: AnyPublisher<Double, Never> { get }
+    var commandPublisher: AnyPublisher<WatchCommand, Never> { get }
+    var isReachablePublisher: AnyPublisher<Bool, Never> { get }
+    
+    func start()
+    func send(_ command: WatchCommand)
+}
+
 enum BluetoothHeartRateConnectionState: Equatable {
     case unsupported
     case unauthorized
