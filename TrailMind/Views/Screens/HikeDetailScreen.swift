@@ -44,7 +44,7 @@ struct HikeDetailScreen: View {
                         HStack {
                             MetricTileView(
                                 title: "Trail Score",
-                                value: "\(Int(session.trailDifficultyScore))",
+                                value: "\(Int(session.trailDifficultyScore.rounded()))",
                                 footnote: "effort + terrain"
                             )
                             MetricTileView(

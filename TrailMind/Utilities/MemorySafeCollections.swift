@@ -57,12 +57,11 @@ enum MemorySafeCollections {
         let weightedCadence = weightedAverage(bucket.map { ($0.cadence, $0.duration) })
         let terrain = dominantTerrain(in: bucket)
 
-        let slopePercent: Double
-        if distance > 0 {
-            slopePercent = (elevationGain / distance) * 100
-        } else {
-            slopePercent = weightedAverage(bucket.map { ($0.slopePercent, 1.0) })
-        }
+        let slopePercent = weightedAverage(
+            bucket.map { segment in
+                (segment.slopePercent, max(segment.distance, 1))
+            }
+        )
 
         let averageSpeed = duration > 0 ? distance / duration : 0
 

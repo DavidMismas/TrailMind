@@ -86,7 +86,7 @@ struct LiveHikeScreen: View {
                             )
                             MetricTileView(
                                 title: "Trail Difficulty",
-                                value: "\(Int(viewModel.trailDifficultyScore))",
+                                value: "\(Int(viewModel.trailDifficultyScore.rounded()))",
                                 footnote: "terrain + effort",
                                 tint: TrailTheme.warning
                             )

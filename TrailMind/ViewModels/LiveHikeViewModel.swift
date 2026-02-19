@@ -51,6 +51,10 @@ final class LiveHikeViewModel: ObservableObject {
     private var pausedAccumulatedSeconds: TimeInterval = 0
     private var pausedStartedAt: Date?
     private var lastFilteredAltitude: Double?
+    private var lastAltitudeSampleAt: Date?
+    private var altitudeSmoothingBuffer: [AltitudeReading] = []
+    private var slopeWindow: [SmoothedAltitudePoint] = []
+    private var gainBaselineAltitude: Double?
 
     private let maxInMemoryRoutePoints = 4000
     private let maxInMemorySegments = 6000
@@ -62,11 +66,27 @@ final class LiveHikeViewModel: ObservableObject {
     private let liveActivityDistanceDelta: Double = 2
     private let maxWidgetAltitudeSamples = 90
     private let maxReliableVerticalAccuracy: Double = 16
-    private let minAltitudeStepMeters: Double = 1.4
+    private let altitudeAverageWindowSeconds: TimeInterval = 10
+    private let slopeLookbackWindowSeconds: TimeInterval = 10
+    private let minSlopeDistanceMeters: Double = 8
+    private let minVerticalDeltaNoiseMeters: Double = 0.25
+    private let gainHysteresisMeters: Double = 0.8
     private let maxVerticalSpeedMetersPerSecond: Double = 4.5
 
     private var lastLiveActivityUpdateAt: Date?
     private var lastLiveActivityDistanceMeters: Double = 0
+
+    private struct AltitudeReading {
+        let timestamp: Date
+        let altitude: Double
+        let verticalAccuracy: Double
+    }
+
+    private struct SmoothedAltitudePoint {
+        let timestamp: Date
+        let coordinate: CLLocationCoordinate2D
+        let altitude: Double
+    }
 
     init(
         sessionStore: HikeSessionStore,
@@ -263,6 +283,10 @@ final class LiveHikeViewModel: ObservableObject {
         pausedAccumulatedSeconds = 0
         pausedStartedAt = nil
         lastFilteredAltitude = nil
+        lastAltitudeSampleAt = nil
+        altitudeSmoothingBuffer.removeAll(keepingCapacity: true)
+        slopeWindow.removeAll(keepingCapacity: true)
+        gainBaselineAltitude = nil
         currentAltitude = 0
 
         if let startDate {
@@ -308,6 +332,10 @@ final class LiveHikeViewModel: ObservableObject {
         lastLiveActivityDistanceMeters = 0
         pausedAccumulatedSeconds = 0
         lastFilteredAltitude = nil
+        lastAltitudeSampleAt = nil
+        altitudeSmoothingBuffer.removeAll(keepingCapacity: true)
+        slopeWindow.removeAll(keepingCapacity: true)
+        gainBaselineAltitude = nil
 
         let session = HikeSession(
             startedAt: startDate,
@@ -352,6 +380,7 @@ final class LiveHikeViewModel: ObservableObject {
         self.pausedStartedAt = nil
         elapsed = elapsedAt(Date())
         lastPoint = nil
+        slopeWindow.removeAll(keepingCapacity: true)
         pacingAdvice = "Resumed. Move to refresh pace guidance."
         refreshSafety()
         updateLiveActivityIfNeeded(force: true)
@@ -377,42 +406,39 @@ final class LiveHikeViewModel: ObservableObject {
         let previousFilteredAltitude = lastFilteredAltitude
         let filteredAltitude = filteredAltitude(for: point, previousFilteredAltitude: previousFilteredAltitude)
         currentAltitude = filteredAltitude
+        let filteredPoint = makePoint(point, altitude: filteredAltitude)
 
         if isPaused {
             lastFilteredAltitude = filteredAltitude
+            gainBaselineAltitude = gainBaselineAltitude ?? filteredAltitude
             persistCheckpoint(force: false)
             return
         }
 
-        route.append(point)
+        route.append(filteredPoint)
         if route.count > maxInMemoryRoutePoints {
             route = MemorySafeCollections.downsampleRoute(route, to: maxInMemoryRoutePoints)
         }
+        appendSlopeWindowPoint(filteredPoint, altitude: filteredAltitude)
 
         guard let previous = lastPoint else {
-            lastPoint = point
+            lastPoint = filteredPoint
             lastFilteredAltitude = filteredAltitude
+            gainBaselineAltitude = filteredAltitude
             persistCheckpoint(force: false)
             return
         }
 
-        let distance = CLLocation(
-            latitude: previous.coordinate.latitude,
-            longitude: previous.coordinate.longitude
-        ).distance(
-            from: CLLocation(
-                latitude: point.coordinate.latitude,
-                longitude: point.coordinate.longitude
-            )
-        )
+        let distance = horizontalDistance(from: previous.coordinate, to: filteredPoint.coordinate)
 
-        let time = max(1, point.timestamp.timeIntervalSince(previous.timestamp))
+        let time = max(1, filteredPoint.timestamp.timeIntervalSince(previous.timestamp))
         let segmentSpeed = distance / time
         let baselineAltitude = previousFilteredAltitude ?? previous.altitude
         let rawVerticalDelta = filteredAltitude - baselineAltitude
         let cappedVerticalDelta = cappedAltitudeDelta(rawVerticalDelta, duration: time)
-        let verticalDelta = filteredVerticalDelta(cappedVerticalDelta)
-        let slope = distance > 0 ? (verticalDelta / distance) * 100 : 0
+        let verticalDelta = denoisedVerticalDelta(cappedVerticalDelta)
+        let slope = smoothedSlopePercent(fallbackDistance: distance, fallbackVerticalDelta: verticalDelta)
+        let elevationGain = elevationGainIncrement(for: filteredAltitude)
 
         speed = segmentSpeed
         slopePercent = slope
@@ -425,10 +451,10 @@ final class LiveHikeViewModel: ObservableObject {
         segments.append(
             TrailSegment(
                 startedAt: previous.timestamp,
-                endedAt: point.timestamp,
+                endedAt: filteredPoint.timestamp,
                 duration: time,
                 distance: distance,
-                elevationGain: verticalDelta,
+                elevationGain: elevationGain,
                 slopePercent: slope,
                 averageSpeed: segmentSpeed,
                 heartRate: heartRate ?? 0,
@@ -446,7 +472,7 @@ final class LiveHikeViewModel: ObservableObject {
         updateLiveActivityIfNeeded(force: false)
         persistCheckpoint(force: false)
 
-        lastPoint = point
+        lastPoint = filteredPoint
         lastFilteredAltitude = filteredAltitude
     }
 
@@ -623,6 +649,13 @@ final class LiveHikeViewModel: ObservableObject {
         elapsed = elapsedAt(Date())
         lastPoint = checkpoint.route.last
         lastFilteredAltitude = checkpoint.lastFilteredAltitude ?? checkpoint.route.last?.altitude ?? checkpoint.currentAltitude
+        lastAltitudeSampleAt = nil
+        altitudeSmoothingBuffer.removeAll(keepingCapacity: true)
+        slopeWindow.removeAll(keepingCapacity: true)
+        gainBaselineAltitude = lastFilteredAltitude
+        if let restoredPoint = lastPoint {
+            appendSlopeWindowPoint(restoredPoint, altitude: restoredPoint.altitude)
+        }
         heartRate = nil
         heartRateSourceLabel = "Reconnecting heart-rate source"
         lastHeartRateSampleAt = nil
@@ -691,15 +724,7 @@ final class LiveHikeViewModel: ObservableObject {
             for index in 1..<route.count {
                 let previous = route[index - 1]
                 let current = route[index]
-                let stepDistance = CLLocation(
-                    latitude: previous.coordinate.latitude,
-                    longitude: previous.coordinate.longitude
-                ).distance(
-                    from: CLLocation(
-                        latitude: current.coordinate.latitude,
-                        longitude: current.coordinate.longitude
-                    )
-                )
+                let stepDistance = horizontalDistance(from: previous.coordinate, to: current.coordinate)
                 cumulativeDistance += max(0, stepDistance)
                 samples.append(
                     LiveAltitudeSample(
@@ -748,22 +773,30 @@ final class LiveHikeViewModel: ObservableObject {
         previousFilteredAltitude: Double?
     ) -> Double {
         let hasReliableVerticalAccuracy = point.verticalAccuracy >= 0 && point.verticalAccuracy <= maxReliableVerticalAccuracy
-        guard hasReliableVerticalAccuracy else {
-            return previousFilteredAltitude ?? point.altitude
-        }
+        let sampleAltitude = hasReliableVerticalAccuracy ? point.altitude : (previousFilteredAltitude ?? point.altitude)
+        let sampleVerticalAccuracy = hasReliableVerticalAccuracy ? max(1, point.verticalAccuracy) : maxReliableVerticalAccuracy
+
+        altitudeSmoothingBuffer.append(
+            AltitudeReading(
+                timestamp: point.timestamp,
+                altitude: sampleAltitude,
+                verticalAccuracy: sampleVerticalAccuracy
+            )
+        )
+        trimAltitudeSmoothingBuffer(referenceTime: point.timestamp)
+
+        let averagedAltitude = weightedAltitudeAverage(referenceTime: point.timestamp)
+        let previousSampleAt = lastAltitudeSampleAt
+        lastAltitudeSampleAt = point.timestamp
 
         guard let previousFilteredAltitude else {
-            return point.altitude
+            return averagedAltitude
         }
 
-        let alpha = altitudeSmoothingAlpha(for: point.verticalAccuracy)
-        return previousFilteredAltitude + (point.altitude - previousFilteredAltitude) * alpha
-    }
-
-    private func altitudeSmoothingAlpha(for verticalAccuracy: Double) -> Double {
-        if verticalAccuracy <= 4 { return 0.45 }
-        if verticalAccuracy <= 8 { return 0.32 }
-        return 0.2
+        let sampleDuration = max(1, point.timestamp.timeIntervalSince(previousSampleAt ?? point.timestamp))
+        let rawDelta = averagedAltitude - previousFilteredAltitude
+        let cappedDelta = cappedAltitudeDelta(rawDelta, duration: sampleDuration)
+        return previousFilteredAltitude + cappedDelta
     }
 
     private func cappedAltitudeDelta(_ delta: Double, duration: TimeInterval) -> Double {
@@ -771,11 +804,113 @@ final class LiveHikeViewModel: ObservableObject {
         return min(max(delta, -maxDelta), maxDelta)
     }
 
-    private func filteredVerticalDelta(_ delta: Double) -> Double {
-        if abs(delta) < minAltitudeStepMeters {
+    private func denoisedVerticalDelta(_ delta: Double) -> Double {
+        if abs(delta) < minVerticalDeltaNoiseMeters {
             return 0
         }
         return delta
+    }
+
+    private func weightedAltitudeAverage(referenceTime: Date) -> Double {
+        guard let last = altitudeSmoothingBuffer.last else {
+            return currentAltitude
+        }
+
+        var weightedSum: Double = 0
+        var totalWeight: Double = 0
+
+        for reading in altitudeSmoothingBuffer {
+            let age = max(0, referenceTime.timeIntervalSince(reading.timestamp))
+            let recencyWeight = max(0.15, 1 - (age / altitudeAverageWindowSeconds))
+            let accuracyWeight = 1 / max(1, reading.verticalAccuracy)
+            let weight = recencyWeight * accuracyWeight
+            weightedSum += reading.altitude * weight
+            totalWeight += weight
+        }
+
+        guard totalWeight > 0 else { return last.altitude }
+        return weightedSum / totalWeight
+    }
+
+    private func trimAltitudeSmoothingBuffer(referenceTime: Date) {
+        let cutoff = referenceTime.addingTimeInterval(-altitudeAverageWindowSeconds)
+        altitudeSmoothingBuffer.removeAll { $0.timestamp < cutoff }
+    }
+
+    private func makePoint(_ point: LocationPoint, altitude: Double) -> LocationPoint {
+        LocationPoint(
+            id: point.id,
+            timestamp: point.timestamp,
+            latitude: point.coordinate.latitude,
+            longitude: point.coordinate.longitude,
+            altitude: altitude,
+            speed: point.speed,
+            horizontalAccuracy: point.horizontalAccuracy,
+            verticalAccuracy: point.verticalAccuracy
+        )
+    }
+
+    private func appendSlopeWindowPoint(_ point: LocationPoint, altitude: Double) {
+        slopeWindow.append(
+            SmoothedAltitudePoint(
+                timestamp: point.timestamp,
+                coordinate: point.coordinate,
+                altitude: altitude
+            )
+        )
+        let cutoff = point.timestamp.addingTimeInterval(-slopeLookbackWindowSeconds)
+        slopeWindow.removeAll { $0.timestamp < cutoff }
+    }
+
+    private func smoothedSlopePercent(
+        fallbackDistance: Double,
+        fallbackVerticalDelta: Double
+    ) -> Double {
+        let fallbackSlope = fallbackDistance >= (minSlopeDistanceMeters * 0.5)
+            ? (fallbackVerticalDelta / fallbackDistance) * 100
+            : 0
+
+        guard let current = slopeWindow.last else {
+            return fallbackSlope
+        }
+
+        for candidate in slopeWindow {
+            let horizontal = horizontalDistance(from: candidate.coordinate, to: current.coordinate)
+            guard horizontal >= minSlopeDistanceMeters else { continue }
+            let duration = max(1, current.timestamp.timeIntervalSince(candidate.timestamp))
+            let rawVerticalDelta = current.altitude - candidate.altitude
+            let cappedVerticalDelta = cappedAltitudeDelta(rawVerticalDelta, duration: duration)
+            return (cappedVerticalDelta / horizontal) * 100
+        }
+
+        return fallbackSlope
+    }
+
+    private func elevationGainIncrement(for filteredAltitude: Double) -> Double {
+        guard let gainBaselineAltitude else {
+            self.gainBaselineAltitude = filteredAltitude
+            return 0
+        }
+
+        let deltaFromBaseline = filteredAltitude - gainBaselineAltitude
+        if deltaFromBaseline >= gainHysteresisMeters {
+            self.gainBaselineAltitude = filteredAltitude
+            return deltaFromBaseline
+        }
+
+        if deltaFromBaseline <= -gainHysteresisMeters {
+            self.gainBaselineAltitude = filteredAltitude
+        }
+
+        return 0
+    }
+
+    private func horizontalDistance(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D
+    ) -> Double {
+        CLLocation(latitude: from.latitude, longitude: from.longitude)
+            .distance(from: CLLocation(latitude: to.latitude, longitude: to.longitude))
     }
 
     private func handleWatchCommand(_ command: WatchCommand) {
